@@ -38,6 +38,7 @@ let currentStopIndex = 0;
 let synth = window.speechSynthesis;
 let currentDestination = '';
 let localTimeInterval = null; // For the clock
+let destinationTimezone = null; // NEW: To store the destination's timezone
 
 // --- 4. INITIALIZATION ---
 window.initializeTourApp = () => {
@@ -97,8 +98,22 @@ function getDistanceInKm(latLng1, latLng2) {
     return R * c;
 }
 
+function updateLocalTime(element) {
+    if (localTimeInterval) clearInterval(localTimeInterval);
+    localTimeInterval = setInterval(() => {
+        if (destinationTimezone) {
+             // Use the destination's timezone if available
+            element.textContent = new Date().toLocaleTimeString('en-US', { timeZone: destinationTimezone, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        } else {
+            // Fallback to user's local time
+            element.textContent = new Date().toLocaleTimeString();
+        }
+    }, 1000);
+}
+
 function resetToMainMenu() {
     if (localTimeInterval) clearInterval(localTimeInterval); // Stop clock
+    destinationTimezone = null; // Clear timezone
     toggleVisibility(galleryContainer, false);
     toggleVisibility(streetviewContainer, false); 
     streetView.setVisible(false);
@@ -228,74 +243,44 @@ async function processLocation(location) {
     });
 }
 
-
 // --- 7. ITINERARY AND GALLERY FETCHING ---
 
-async function fetchItinerary(destination, focus) { // <-- MODIFIED
-    // Define the text for each tour focus
-    const focusText = {
-        'general': 'a general tourist itinerary',
-        'foodie': 'a foodie tour focusing on unique restaurants, markets, and culinary experiences',
-        'history': 'a historical tour focusing on significant landmarks, museums, and sites',
-        'nature': 'a nature tour focusing on parks, natural landscapes, and scenic views',
-        'art': 'an art and culture tour visiting galleries, street art, theaters, and cultural centers',
-        'hidden_gems': 'a tour of hidden gems and less-known, unique spots'
-    }[focus];
+async function fetchLocalInfo(query) {
+    const prompt = `Provide local information for ${query}. Respond with a single, valid JSON object containing "weather" (an object with "temp_c", "temp_f", and "condition") and "timezone" (the IANA timezone name string, e.g., "America/New_York").`;
+    try {
+        const response = await fetch(GEMINI_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: { temperature: 0, response_mime_type: "application/json" }
+            }),
+        });
+        if (!response.ok) throw new Error('Local info API request failed');
+        const data = await response.json();
+        const info = JSON.parse(data.candidates[0].content.parts[0].text);
 
-    // Create a detailed prompt with error handling instructions
-    const prompt = `Create a 5-stop, one-day ${focusText} for ${destination}.
-
-**Instructions:**
-1.  If the location "${destination}" is not a real, specific place (e.g., "asdfasdf", "nowhereville"), or if you cannot create a tour for it, you MUST respond with ONLY the following JSON object: \`{"error": "Could not generate a tour for '${destination}'. Please try a different place."}\`.
-2.  Otherwise, generate a valid JSON array of 5 objects. Do not include markdown ticks like \`\`\`json or any text outside the JSON array itself.
-3.  Each object in the array must have a "locationName" (a specific, mappable place like "Eiffel Tower, Paris, France") and a "briefDescription" (a short, engaging sentence related to the tour focus).`;
-
-    let attempts = 0;
-    while (true) {
-        attempts++;
-        // Update loading text to be more specific
-        setLoading(true, `Generating ${focus} Itinerary... (Attempt ${attempts})`);
-        try {
-            const response = await fetch(GEMINI_API_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig: { temperature: 0.5, response_mime_type: "application/json" }
-                }),
-            });
-            if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
-            const data = await response.json();
-            const parsedResponse = JSON.parse(data.candidates[0].content.parts[0].text);
-
-            // --- NEW: Graceful Error Handling ---
-            if (parsedResponse.error) {
-                // If the API returns our specific error object, throw it to be caught by generateTour()
-                throw new Error(parsedResponse.error);
-            }
-
-            const parsedItinerary = parsedResponse;
-
-            setLoading(true, 'Validating locations...');
-            const geocodedStops = await Promise.all(parsedItinerary.map(async (stop) => {
-                try {
-                    const { results } = await geocoder.geocode({ address: stop.locationName });
-                    if (results && results.length > 0) {
-                        stop.geometry = results[0].geometry;
-                        return stop;
-                    }
-                } catch (e) { console.warn(`Geocoding failed for ${stop.locationName}`); }
-                return null;
-            }));
-
-            const validStops = geocodedStops.filter(Boolean);
-            if (validStops.length < 1) throw new Error("Could not find any valid, mappable locations for this tour.");
-            return validStops;
-        } catch (error) {
-            console.error(`Attempt ${attempts} failed:`, error);
-            if (attempts >= 5) throw new Error("Failed to get a valid itinerary after multiple attempts.");
-            await new Promise(resolve => setTimeout(resolve, 2000));
+        // Weather processing with defensive coding
+        let weatherText = 'Unavailable';
+        let weatherEmoji = '❔';
+        if (info.weather && info.weather.condition) {
+            const condition = info.weather.condition.toLowerCase();
+            if (condition.includes('sun') || condition.includes('clear')) weatherEmoji = '☀️';
+            else if (condition.includes('cloud')) weatherEmoji = '☁️';
+            else if (condition.includes('rain') || condition.includes('shower')) weatherEmoji = '🌧️';
+            else if (condition.includes('storm')) weatherEmoji = '⛈️';
+            else if (condition.includes('snow')) weatherEmoji = '❄️';
+            else if (condition.includes('fog') || condition.includes('mist')) weatherEmoji = '🌫️';
+            weatherText = `${info.weather.temp_f}°F / ${info.weather.temp_c}°C, ${info.weather.condition}`;
         }
+
+        return {
+            weather: { text: weatherText, emoji: weatherEmoji },
+            timezone: info.timezone || null
+        };
+    } catch (error) {
+        console.error("Could not fetch local info:", error);
+        return { weather: null, timezone: null }; // Fail gracefully
     }
 }
 
@@ -381,30 +366,28 @@ async function showFinalGallery(destination) {
     streetView.setVisible(false);
     setLoading(true, 'Curating gallery and local information...');
 
-    // Start the clock as soon as the gallery view is requested
-    updateLocalTime(localTime);
-
     try {
-        // Fetch everything for the gallery view in parallel
-        const [images, videos, weather, news] = await Promise.all([
+        // Fetch everything in parallel
+        const [images, videos, localInfo, news] = await Promise.all([
             fetchImages(destination),
             fetchVideos(destination),
-            fetchWeather(destination),
+            fetchLocalInfo(destination), // Use the new function
             fetchNewsOutlets(destination)
         ]);
 
+        // Set timezone and start the clock
+        destinationTimezone = localInfo.timezone;
+        updateLocalTime(localTime);
+
         // Populate Weather
-        localWeather.textContent = weather ? `${weather.emoji} ${weather.text}` : 'Unavailable';
+        localWeather.textContent = localInfo.weather ? `${localInfo.weather.emoji} ${localInfo.weather.text}` : 'Unavailable';
 
-        // Populate News
+        // ... rest of the function is the same
         populateNews(news, localNews);
-
-        // Populate Image/Video Grid
         const galleryItems = [...images, ...videos];
         galleryItems.sort(() => Math.random() - 0.5);
         populateGalleryGrid(galleryItems, destination);
 
-        // Hide loading and show the fully populated gallery
         setLoading(false);
         toggleVisibility(galleryContainer, true);
 
@@ -467,20 +450,32 @@ function populateGalleryGrid(items, destination) {
     galleryTitle.textContent = `Image & Video Gallery: ${destination}`;
     galleryGrid.innerHTML = '';
 
-    if(items.length === 0) {
+    if (!items || items.length === 0) {
         galleryGrid.innerHTML = `<p class="text-slate-400 col-span-full text-center">No images or videos found.</p>`;
         return;
     }
 
     items.forEach(item => {
         const div = document.createElement('div');
-        // Added margin and a border for better visual separation
-        div.className = 'aspect-video bg-slate-800 rounded-lg overflow-hidden shadow-lg border-2 border-slate-700 hover:border-cyan-400 transition-all';
+        // Make sure the container is a block element
+        div.className = 'block aspect-video bg-slate-800 rounded-lg overflow-hidden shadow-lg border-2 border-slate-700 hover:border-cyan-400 transition-all';
 
         if (item.type === 'image') {
-            // ... (image creation unchanged)
+            const img = document.createElement('img');
+            img.src = item.url;
+            img.className = 'w-full h-full object-cover';
+            img.alt = `Image of ${destination}`;
+            img.onerror = () => { div.style.display = 'none'; }; 
+            div.appendChild(img);
         } else if (item.type === 'video') {
-            // ... (video creation unchanged)
+            const iframe = document.createElement('iframe');
+            // FIX: Use the correct YouTube embed URL
+            iframe.src = `https://www.youtube.com/embed/${item.videoId}`;
+            iframe.className = 'w-full h-full';
+            iframe.frameBorder = '0';
+            iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+            iframe.allowFullscreen = true;
+            div.appendChild(iframe);
         }
         galleryGrid.appendChild(div);
     });
