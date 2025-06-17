@@ -245,6 +245,79 @@ async function processLocation(location) {
 
 // --- 7. ITINERARY AND GALLERY FETCHING ---
 
+async function fetchItinerary(destination, focus) {
+    setLoading(true, `Generating ${focus} tour for ${destination}...`);
+    const prompt = `
+        You are a virtual tour guide. Create a 5-stop virtual tour itinerary for the city: "${destination}".
+        The tour focus is: "${focus}".
+        For each stop, provide the following information in a valid JSON format:
+        1. "locationName": The name of the landmark or place.
+        2. "briefDescription": A concise, one-sentence interesting fact or description suitable for a tour guide to say upon arrival.
+        3. "geometry": An object containing a "location" object with "lat" and "lng" coordinates.
+
+        IMPORTANT: Respond with ONLY the valid JSON array of objects. Do not include any other text, markdown, or explanation.
+        The final output must be a parsable JSON array.
+
+        Example Format:
+        [
+          {
+            "locationName": "Example Landmark",
+            "briefDescription": "This is a fascinating example landmark.",
+            "geometry": {
+              "location": {
+                "lat": 40.7128,
+                "lng": -74.0060
+              }
+            }
+          }
+        ]
+    `;
+
+    try {
+        const response = await fetch(GEMINI_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                    temperature: 0.7,
+                    response_mime_type: "application/json"
+                }
+            }),
+        });
+
+        if (!response.ok) {
+            const errorBody = await response.text();
+            console.error("API Error Response:", errorBody);
+            throw new Error(`The AI tour guide is currently unavailable (API Error: ${response.status}). Please try again later.`);
+        }
+
+        const data = await response.json();
+        // The API returns the JSON as a string in the text part, so we parse it.
+        const itinerary = JSON.parse(data.candidates[0].content.parts[0].text);
+
+        // Basic validation to ensure we have a usable itinerary
+        if (!Array.isArray(itinerary) || itinerary.length === 0) {
+            throw new Error("The AI guide couldn't create an itinerary for this location. It might be a bit off the beaten path!");
+        }
+
+        // Deeper validation to ensure all required fields are present
+        itinerary.forEach((stop, index) => {
+            if (!stop.locationName || !stop.briefDescription || !stop.geometry || !stop.geometry.location || !stop.geometry.location.lat || !stop.geometry.location.lng) {
+                 throw new Error(`The AI guide returned an invalid itinerary (stop ${index} is malformed). Please try again.`);
+            }
+        });
+
+        console.log('Generated Itinerary:', itinerary);
+        return itinerary;
+
+    } catch (error) {
+        console.error('Failed to fetch or parse itinerary:', error);
+        // Re-throw a user-friendly error to be caught by the generateTour function
+        throw new Error(error.message || "Could not generate the tour itinerary. Please check the destination and try again.");
+    }
+}
+
 async function fetchLocalInfo(query) {
     const prompt = `Provide local information for ${query}. Respond with a single, valid JSON object containing "weather" (an object with "temp_c", "temp_f", and "condition") and "timezone" (the IANA timezone name string, e.g., "America/New_York").`;
     try {
