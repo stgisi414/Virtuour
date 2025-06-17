@@ -75,7 +75,22 @@ generateTourButton.addEventListener('click', generateTour);
 endTourButton.addEventListener('click', resetToMainMenu);
 pauseTourButton.addEventListener('click', togglePause);
 
-// Resize listener no longer needed for pause button positioning
+// Add resize listener for dynamic pause button positioning
+window.addEventListener('resize', positionPauseButton);
+
+function positionPauseButton() {
+    const tourInfo = document.getElementById('tour-information');
+    const pauseContainer = document.getElementById('pause-button-container');
+    
+    if (tourInfo && pauseContainer) {
+        const tourInfoRect = tourInfo.getBoundingClientRect();
+        const tourInfoTop = tourInfoRect.top + window.scrollY;
+        
+        // Position the pause button 10px above the tour info div
+        pauseContainer.style.bottom = `${window.innerHeight - tourInfoTop + 10}px`;
+        pauseContainer.style.right = '16px'; // Keep right positioning
+    }
+}
 
 // --- 5. HELPER FUNCTIONS ---
 function toggleVisibility(element, show) {
@@ -184,6 +199,7 @@ async function generateTour() {
         streetView.setVisible(true);
 
         toggleVisibility(pauseButtonContainer, true);
+        positionPauseButton(); // Position the button dynamically
         toggleVisibility(addressLabel, true);
 
 
@@ -356,6 +372,7 @@ async function processLocation(location) {
     synth.cancel();
     subtitlesContainer.textContent = `${location.locationName}: ${location.briefDescription}`;
     toggleVisibility(tourInfoContainer, true);
+    positionPauseButton(); // Reposition when tour info is shown
 
 
 
