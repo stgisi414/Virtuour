@@ -165,7 +165,7 @@ async function processTourLoop() {
 
         if (currentStopIndex === 0) {
             setLoading(true, `Going to the first stop: ${currentStop.locationName}`);
-            streetView.setPosition(currentStop.geometry.location);
+            await setStreetViewPosition(currentStop);
         } else {
             const origin = tourItinerary[currentStopIndex - 1];
             await animateStreetView(origin, currentStop);
@@ -176,6 +176,75 @@ async function processTourLoop() {
 
     setLoading(true, 'Tour Complete! Curating gallery...');
     await showFinalGallery(currentDestination);
+}
+
+// New function to validate and set Street View position with fallbacks
+async function setStreetViewPosition(stop) {
+    const location = stop.geometry.location;
+    
+    // Validate coordinates
+    if (!location || typeof location.lat !== 'number' || typeof location.lng !== 'number') {
+        console.warn(`Invalid coordinates for ${stop.locationName}, attempting geocoding fallback`);
+        await geocodeAndSetPosition(stop.locationName);
+        return;
+    }
+
+    return new Promise((resolve) => {
+        // Create a Street View service to check if panorama is available
+        const streetViewService = new google.maps.StreetViewService();
+        
+        streetViewService.getPanorama({
+            location: location,
+            radius: 100, // Search within 100 meters
+            source: google.maps.StreetViewSource.OUTDOOR
+        }, (data, status) => {
+            if (status === 'OK') {
+                // Street View is available at this location
+                streetView.setPosition(data.location.latLng);
+                console.log(`Street View found for ${stop.locationName} at`, data.location.latLng.toJSON());
+            } else {
+                console.warn(`No Street View available for ${stop.locationName}, trying geocoding fallback`);
+                // Fallback to geocoding the location name
+                geocodeAndSetPosition(stop.locationName).then(resolve);
+                return;
+            }
+            resolve();
+        });
+    });
+}
+
+// Geocoding fallback function
+async function geocodeAndSetPosition(locationName) {
+    return new Promise((resolve) => {
+        geocoder.geocode({ address: locationName }, (results, status) => {
+            if (status === 'OK' && results[0]) {
+                const geocodedLocation = results[0].geometry.location;
+                console.log(`Geocoded ${locationName} to`, geocodedLocation.toJSON());
+                
+                // Check if Street View is available at geocoded location
+                const streetViewService = new google.maps.StreetViewService();
+                streetViewService.getPanorama({
+                    location: geocodedLocation,
+                    radius: 500, // Larger radius for geocoded locations
+                    source: google.maps.StreetViewSource.OUTDOOR
+                }, (data, status) => {
+                    if (status === 'OK') {
+                        streetView.setPosition(data.location.latLng);
+                        console.log(`Street View found near geocoded location for ${locationName}`);
+                    } else {
+                        // Last resort: set to geocoded location even if no Street View
+                        streetView.setPosition(geocodedLocation);
+                        console.warn(`No Street View available, using geocoded coordinates for ${locationName}`);
+                    }
+                    resolve();
+                });
+            } else {
+                console.error(`Geocoding failed for ${locationName}:`, status);
+                // Keep current position as last resort
+                resolve();
+            }
+        });
+    });
 }
 
 async function animateStreetView(originStop, destinationStop) {
@@ -195,17 +264,15 @@ async function animateStreetView(originStop, destinationStop) {
             travelMode: google.maps.TravelMode[travelMode]
         }, (response, status) => {
             if (status !== 'OK') {
-                console.error(`Directions request failed: ${status}. Jumping directly.`);
-                streetView.setPosition(destinationLocation);
-                setTimeout(resolve, 1000);
+                console.error(`Directions request failed: ${status}. Using fallback positioning.`);
+                setStreetViewPosition(destinationStop).then(resolve);
                 return;
             }
             const path = response.routes[0].overview_path;
             let step = 0;
             const animate = () => {
                 if (step >= path.length) {
-                    streetView.setPosition(destinationLocation);
-                    resolve();
+                    setStreetViewPosition(destinationStop).then(resolve);
                     return;
                 }
                 streetView.setPosition(path[step]);
