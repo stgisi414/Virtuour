@@ -141,7 +141,9 @@ function togglePause() {
 
 function updateAddressLabel(locationName) {
     currentAddress.textContent = locationName;
-    toggleVisibility(addressLabel, true);
+    // Force visibility and ensure it's displayed
+    addressLabel.classList.remove('invisible', 'opacity-0');
+    addressLabel.style.display = 'block';
 }
 
 function resetToMainMenu() {
@@ -184,7 +186,13 @@ async function generateTour() {
 
         toggleVisibility(streetviewContainer, true);
         streetView.setVisible(true);
-        toggleVisibility(pauseButtonContainer, true);
+        
+        // Ensure pause button and address label are visible
+        pauseButtonContainer.classList.remove('invisible', 'opacity-0');
+        pauseButtonContainer.style.display = 'block';
+        addressLabel.classList.remove('invisible', 'opacity-0');
+        addressLabel.style.display = 'block';
+        
         currentStopIndex = 0;
         await processTourLoop();
     } catch (error) {
