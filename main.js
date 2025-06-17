@@ -1,9 +1,9 @@
 // --- 1. API KEY AND ENDPOINT CONFIGURATION ---
-const GEMINI_API_KEY = 'YOUR_GEMINI_API_KEY'; // Replace with your Gemini API Key
-const GOOGLE_API_KEY = 'YOUR_Maps_API_KEY'; // Replace with your Google Cloud API Key
+const GEMINI_API_KEY = 'AIzaSyDtLyUB-2wocE-uNG5e3pwNFArjn1GVTco'; // Your Gemini API Key
+const GOOGLE_API_KEY = 'AIzaSyCYxnWpHNlzAz5h2W3pGTaW_oIP1ukTs1Y'; // Your Google Cloud API Key
 
 const YOUTUBE_API_KEY = GOOGLE_API_KEY; 
-const CUSTOM_SEARCH_ENGINE_ID = 'YOUR_CUSTOM_SEARCH_ENGINE_ID'; 
+const CUSTOM_SEARCH_ENGINE_ID = '16b67ee3373714c2b'; 
 
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 const YOUTUBE_API_URL = 'https://www.googleapis.com/youtube/v3/search';
@@ -44,7 +44,7 @@ const returnToTourButton = document.getElementById('returnToTourButton');
 let streetView;
 let directionsService;
 let geocoder;
-let placesService; // NEW: For Places API
+let placesService; // For Places API
 let tourItinerary = [];
 let currentStopIndex = 0;
 let synth = window.speechSynthesis;
@@ -53,7 +53,7 @@ let localTimeInterval = null;
 let destinationTimezone = null; 
 let tourPaused = false; 
 let currentPauseResolve = null; 
-let originalStreetViewLocation = null; // NEW: To save state before exploring
+let originalStreetViewLocation = null; // To save state before exploring
 
 // --- 4. INITIALIZATION ---
 window.initializeTourApp = () => {
@@ -71,7 +71,7 @@ window.initializeTourApp = () => {
     });
     directionsService = new google.maps.DirectionsService();
     geocoder = new google.maps.Geocoder();
-    placesService = new google.maps.places.PlacesService(streetViewContainer); // NEW
+    placesService = new google.maps.places.PlacesService(streetViewContainer);
 
     generateTourButton.disabled = false;
     generateTourButton.textContent = 'Generate Tour';
@@ -80,10 +80,10 @@ window.initializeTourApp = () => {
 generateTourButton.addEventListener('click', generateTour);
 endTourButton.addEventListener('click', resetToMainMenu);
 pauseTourButton.addEventListener('click', togglePause);
-exploreButton.addEventListener('click', exploreLocation); // NEW
-returnToTourButton.addEventListener('click', returnToTour); // NEW
+exploreButton.addEventListener('click', exploreLocation);
+returnToTourButton.addEventListener('click', returnToTour);
 
-window.addEventListener('resize', positionControls); // Renamed
+window.addEventListener('resize', positionControls);
 
 function positionControls() {
     const tourInfo = document.getElementById('tour-information');
@@ -165,7 +165,6 @@ function togglePause() {
         pauseText.textContent = 'Pause Tour';
         pauseTourButton.className = 'bg-red-500 hover:bg-red-400 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-red-400 transition-colors duration-300 flex items-center gap-2';
 
-        // When resuming, hide explore button and resolve the pause
         exploreButton.style.display = 'none';
         if (currentPauseResolve) {
             currentPauseResolve();
@@ -174,7 +173,6 @@ function togglePause() {
     }
 }
 
-// NEW: Function to handle exploring inside a location
 async function exploreLocation() {
     const currentStop = tourItinerary[currentStopIndex];
     if (!currentStop) return;
@@ -182,21 +180,19 @@ async function exploreLocation() {
     setLoading(true, `Looking for an inside view of ${currentStop.locationName}...`);
 
     const request = {
-        query: currentStop.locationName,
+        query: `${currentStop.locationName}, ${currentDestination}`,
         fields: ['name', 'place_id'],
-        locationBias: currentStop.geometry.location // Bias search to the current stop's location
+        locationBias: currentStop.geometry.location
     };
 
     placesService.findPlaceFromQuery(request, (results, status) => {
         if (status === google.maps.places.PlacesServiceStatus.OK && results[0] && results[0].place_id) {
             const placeId = results[0].place_id;
-            // Now get details, specifically the panorama
             placesService.getDetails({ placeId: placeId, fields: ['pano'] }, (place, status) => {
                 if (status === google.maps.places.PlacesServiceStatus.OK && place && place.pano) {
-                    originalStreetViewLocation = streetView.getLocation(); // Save our spot
+                    originalStreetViewLocation = streetView.getLocation();
                     streetView.setPano(place.pano);
 
-                    // Update UI for "Explore Mode"
                     exploreButton.style.display = 'none';
                     pauseTourButton.style.display = 'none';
                     returnToTourButton.style.display = 'flex';
@@ -213,13 +209,11 @@ async function exploreLocation() {
     });
 }
 
-// NEW: Function to return from an interior view to the main tour
 function returnToTour() {
     if (originalStreetViewLocation) {
         streetView.setPosition(originalStreetViewLocation.latLng);
         originalStreetViewLocation = null;
     }
-    // Restore the standard tour UI
     returnToTourButton.style.display = 'none';
     exploreButton.style.display = 'flex';
     pauseTourButton.style.display = 'flex';
@@ -247,11 +241,10 @@ async function generateTour() {
         toggleVisibility(streetviewContainer, true);
         streetView.setVisible(true);
 
-        toggleVisibility(controlsContainer, true); // Show the whole container
+        toggleVisibility(controlsContainer, true);
         positionControls();
         toggleVisibility(addressLabel, true);
 
-        // Hide irrelevant buttons at the start
         exploreButton.style.display = 'none';
         returnToTourButton.style.display = 'none';
 
@@ -274,7 +267,6 @@ async function processTourLoop() {
             setLoading(true, `Going to the first stop: ${currentStop.locationName}`);
             await setStreetViewPosition(currentStop);
         } else {
-            // Check for pause before traveling to the *next* stop
             if (tourPaused) {
                 await new Promise(resolve => { currentPauseResolve = resolve; });
             }
@@ -292,18 +284,17 @@ async function processTourLoop() {
 
 async function processLocation(location) {
     setLoading(false);
-    synth.cancel(); // Stop any previous speech
+    synth.cancel();
     subtitlesContainer.textContent = `${location.locationName}: ${location.briefDescription}`;
     toggleVisibility(tourInfoContainer, true);
     positionControls(); 
 
-    // Auto-pause and show explore button
     if (!tourPaused) {
-        togglePause(); // This pauses the tour and sets the button to "Resume"
+        togglePause();
     }
-    exploreButton.style.display = 'flex'; // Show the explore button
-    returnToTourButton.style.display = 'none'; // Ensure return button is hidden
-    pauseTourButton.style.display = 'flex'; // Ensure pause/resume button is visible
+    exploreButton.style.display = 'flex';
+    returnToTourButton.style.display = 'none';
+    pauseTourButton.style.display = 'flex';
 
     return new Promise((resolve) => {
         if ('speechSynthesis' in window) {
@@ -312,33 +303,26 @@ async function processLocation(location) {
             utterance.pitch = 1.1;
             synth.speak(utterance);
 
-            // The tour now waits for the user to press "Resume"
             utterance.onend = () => {
                 toggleVisibility(tourInfoContainer, false);
-                // We don't resolve here anymore. The processTourLoop will handle the pause.
             };
         } else {
-             // Fallback for no speech synthesis
             setTimeout(() => {
                 toggleVisibility(tourInfoContainer, false);
             }, 5000);
         }
-
-        // This is important: The promise now resolves only when the user un-pauses.
-        // But we handle this check at the *start* of the processTourLoop.
         resolve(); 
     });
 }
 
 
 async function setStreetViewPosition(stop) {
-    // ... (This function remains unchanged)
     const locationName = stop.locationName;
     return new Promise(async (resolve) => {
         let targetLatLng;
         try {
             const geocodeResults = await new Promise((geoResolve) => {
-                geocoder.geocode({ address: locationName }, (results, status) => {
+                geocoder.geocode({ address: `${locationName}, ${currentDestination}` }, (results, status) => {
                     if (status === 'OK' && results[0]) {
                         geoResolve(results[0].geometry.location);
                     } else {
@@ -376,14 +360,13 @@ async function setStreetViewPosition(stop) {
 }
 
 async function animateStreetView(originStop, destinationStop) {
-    // ... (This function remains unchanged)
     const originName = originStop.locationName;
     const destinationName = destinationStop.locationName;
     setLoading(true, `Traveling from ${originName} to ${destinationName}...`);
 
-    const originLocation = originStop.geometry.location;
-    const destinationLocation = destinationStop.geometry.location;
-    const distance = getDistanceInKm(originLocation, destinationLocation);
+    const originLocation = new google.maps.LatLng(originStop.geometry.location.lat, originStop.geometry.location.lng);
+    const destinationLocation = new google.maps.LatLng(destinationStop.geometry.location.lat, destinationStop.geometry.location.lng);
+    const distance = getDistanceInKm(originStop.geometry.location, destinationStop.geometry.location);
     const travelMode = await getTravelMode(originName, destinationName, distance);
 
     return new Promise((resolve) => {
@@ -393,16 +376,17 @@ async function animateStreetView(originStop, destinationStop) {
             travelMode: google.maps.TravelMode[travelMode]
         }, (response, status) => {
             if (status !== 'OK') {
+                console.error(`Directions request failed: ${status}. Using fallback positioning.`);
                 setStreetViewPosition(destinationStop).then(resolve);
                 return;
             }
             const path = response.routes[0].overview_path;
             let step = 0;
             const animate = () => {
-                if (tourPaused) { // Check for pause during animation
+                if (tourPaused) {
                     currentPauseResolve = () => {
-                        currentPauseResolve = null; // Clear resolver
-                        animate(); // Continue animation
+                        currentPauseResolve = null;
+                        animate();
                     };
                     return;
                 }
@@ -421,7 +405,6 @@ async function animateStreetView(originStop, destinationStop) {
 }
 
 // --- 8. ITINERARY AND GALLERY FETCHING ---
-// ... (All fetching functions like fetchItinerary, fetchLocalInfo, showFinalGallery, etc. remain unchanged)
 async function fetchItinerary(destination, focus) {
     setLoading(true, `Generating ${focus} tour for ${destination}...`);
     const prompt = `
@@ -431,23 +414,8 @@ async function fetchItinerary(destination, focus) {
         1. "locationName": The name of the landmark or place.
         2. "briefDescription": A concise, one-sentence interesting fact or description suitable for a tour guide to say upon arrival.
         3. "geometry": An object containing a "location" object with "lat" and "lng" coordinates.
-
         IMPORTANT: Respond with ONLY the valid JSON array of objects. Do not include any other text, markdown, or explanation.
         The final output must be a parsable JSON array.
-
-        Example Format:
-        [
-          {
-            "locationName": "Example Landmark",
-            "briefDescription": "This is a fascinating example landmark.",
-            "geometry": {
-              "location": {
-                "lat": 40.7128,
-                "lng": -74.0060
-              }
-            }
-          }
-        ]
     `;
 
     try {
@@ -463,31 +431,22 @@ async function fetchItinerary(destination, focus) {
             }),
         });
 
-        if (!response.ok) {
-            const errorBody = await response.text();
-            console.error("API Error Response:", errorBody);
-            throw new Error(`The AI tour guide is currently unavailable (API Error: ${response.status}). Please try again later.`);
-        }
-
+        if (!response.ok) throw new Error(`The AI tour guide is currently unavailable (API Error: ${response.status})`);
         const data = await response.json();
         const itinerary = JSON.parse(data.candidates[0].content.parts[0].text);
 
         if (!Array.isArray(itinerary) || itinerary.length === 0) {
-            throw new Error("The AI guide couldn't create an itinerary for this location. It might be a bit off the beaten path!");
+            throw new Error("The AI guide couldn't create an itinerary for this location.");
         }
-
         itinerary.forEach((stop, index) => {
             if (!stop.locationName || !stop.briefDescription || !stop.geometry || !stop.geometry.location || !stop.geometry.location.lat || !stop.geometry.location.lng) {
-                 throw new Error(`The AI guide returned an invalid itinerary (stop ${index} is malformed). Please try again.`);
+                 throw new Error(`The AI guide returned an invalid itinerary (stop ${index} is malformed).`);
             }
         });
-
-        console.log('Generated Itinerary:', itinerary);
         return itinerary;
-
     } catch (error) {
         console.error('Failed to fetch or parse itinerary:', error);
-        throw new Error(error.message || "Could not generate the tour itinerary. Please check the destination and try again.");
+        throw new Error(error.message || "Could not generate the tour itinerary.");
     }
 }
 
@@ -524,7 +483,7 @@ async function fetchLocalInfo(query) {
         };
     } catch (error) {
         console.error("Could not fetch local info:", error);
-        return { weather: null, timezone: null }; 
+        return { weather: { text: 'Unavailable', emoji: '❔' }, timezone: null }; 
     }
 }
 
@@ -611,7 +570,7 @@ async function fetchVideos(query) {
 }
 
 async function fetchNewsOutlets(query) {
-    const prompt = `List the top 3-4 local news outlets for ${query}. Provide only a valid JSON array of objects, where each object has "name" and "url". The URL must be a full, valid URL. Example: [{"name": "City Times", "url": "https://www.citytimes.com"}]`;
+    const prompt = `List the top 3-4 local news outlets for ${query}. Provide only a valid JSON array of objects, where each object has "name" and "url".`;
      try {
         const response = await fetch(GEMINI_API_URL, {
             method: 'POST',
@@ -626,7 +585,7 @@ async function fetchNewsOutlets(query) {
         return JSON.parse(data.candidates[0].content.parts[0].text);
     } catch (error) {
         console.error("Could not fetch news:", error);
-        return []; 
+        return [];
     }
 }
 
@@ -668,6 +627,7 @@ function populateGalleryGrid(items, destination) {
             div.appendChild(img);
         } else if (item.type === 'video') {
             const iframe = document.createElement('iframe');
+            // CORRECTED YouTube embed URL
             iframe.src = `https://www.youtube.com/embed/${item.videoId}`;
             iframe.className = 'w-full h-full';
             iframe.frameBorder = '0';
