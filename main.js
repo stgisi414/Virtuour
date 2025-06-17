@@ -1,7 +1,7 @@
 // --- 1. API KEY AND ENDPOINT CONFIGURATION ---
 // IMPORTANT: Replace placeholders with your actual API keys.
 const GEMINI_API_KEY = 'AIzaSyDIFeql6HUpkZ8JJlr_kuN0WDFHUyOhijA';
-const GOOGLE_API_KEY = 'AIzaSyAJ6YHA6SlQgqEYvJsR7t5ilMOkWiYnO-0'; // This is the same key used in index.html
+const GOOGLE_API_KEY = 'AIzaSyAJ6YHA6SlQgqEYvJsR7t5ilMOkWiYnO'; // This is the same key used in index.html
 const CUSTOM_SEARCH_ENGINE_ID = '16b67ee3373714c2b';
 
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-thinking-exp-01-21:generateContent?key=${GEMINI_API_KEY}`;
@@ -17,6 +17,24 @@ const subtitlesContainer = document.getElementById('subtitles-container');
 const loadingIndicator = document.getElementById('loading-indicator');
 const loadingText = document.getElementById('loading-text');
 
+// --- ADD THIS FUNCTION ---
+/**
+ * Shows or hides the loading indicator and updates its message.
+ * @param {boolean} isLoading - True to show the loading screen, false to hide it.
+ * @param {string} message - The text to display on the loading screen.
+ */
+function setLoading(isLoading, message = '') {
+    const loadingIndicator = document.getElementById('loading-indicator');
+    const loadingText = document.getElementById('loading-text');
+
+    if (isLoading) {
+        loadingText.textContent = message;
+        loadingIndicator.classList.remove('hidden');
+    } else {
+        loadingIndicator.classList.add('hidden');
+    }
+}
+
 // --- 3. GLOBAL VARIABLES ---
 let streetView;
 let directionsService;
@@ -26,7 +44,7 @@ let synth = window.speechSynthesis;
 
 // --- 4. INITIALIZATION ---
 // This function is called by the Google Maps script tag once it's loaded.
-window.initMap = () => {
+window.addEventListener('map-ready', () => {
     streetView = new google.maps.StreetViewPanorama(streetviewContainer, {
         position: { lat: 40.7291, lng: -73.9965 }, // Default start
         pov: { heading: 165, pitch: 0 },
@@ -38,7 +56,7 @@ window.initMap = () => {
         enableCloseButton: false,
     });
     directionsService = new google.maps.DirectionsService();
-};
+});
 
 generateTourButton.addEventListener('click', generateTour);
 
@@ -137,7 +155,7 @@ async function animateStreetView(origin, destination) {
                 if (status !== 'OK') {
                     console.error('Directions request failed:', status);
                     alert('Could not calculate route. Jumping directly.');
-                    streetView.setPosition({query: destination});
+                    streetView.setPosition({ query: destination });
                     resolve();
                     return;
                 }
@@ -151,4 +169,14 @@ async function animateStreetView(origin, destination) {
                         resolve();
                         return;
                     }
-                    streetView.setPosition
+                    streetView.setPosition(path[step]);
+                    // Add a short delay between steps to make the animation smoother
+                    setTimeout(animate, 100);
+                    step++;
+                };
+
+                animate();
+            }
+        );
+    });
+}
