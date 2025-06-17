@@ -141,9 +141,11 @@ function togglePause() {
 
 function updateAddressLabel(locationName) {
     currentAddress.textContent = locationName;
-    // Force visibility and ensure it's displayed
-    addressLabel.classList.remove('invisible', 'opacity-0');
+    // Force full visibility
+    addressLabel.className = 'absolute top-4 left-4 bg-slate-900/90 backdrop-blur-sm text-white px-4 py-2 rounded-lg shadow-lg border border-slate-600 font-semibold max-w-xs transition-opacity duration-300';
     addressLabel.style.display = 'block';
+    addressLabel.style.opacity = '1';
+    addressLabel.style.zIndex = '9999999';
 }
 
 function resetToMainMenu() {
@@ -187,11 +189,17 @@ async function generateTour() {
         toggleVisibility(streetviewContainer, true);
         streetView.setVisible(true);
         
-        // Ensure pause button and address label are visible
-        pauseButtonContainer.classList.remove('invisible', 'opacity-0');
+        // Force pause button visibility
+        pauseButtonContainer.className = 'absolute top-4 right-4 transition-opacity duration-300';
         pauseButtonContainer.style.display = 'block';
-        addressLabel.classList.remove('invisible', 'opacity-0');
+        pauseButtonContainer.style.opacity = '1';
+        pauseButtonContainer.style.zIndex = '9999999';
+        
+        // Force address label visibility
+        addressLabel.className = 'absolute top-4 left-4 bg-slate-900/90 backdrop-blur-sm text-white px-4 py-2 rounded-lg shadow-lg border border-slate-600 font-semibold max-w-xs transition-opacity duration-300';
         addressLabel.style.display = 'block';
+        addressLabel.style.opacity = '1';
+        addressLabel.style.zIndex = '9999999';
         
         currentStopIndex = 0;
         await processTourLoop();
