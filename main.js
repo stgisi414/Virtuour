@@ -77,7 +77,6 @@ pauseTourButton.addEventListener('click', togglePause);
 
 // Resize listener no longer needed for pause button positioning
 
-
 // --- 5. HELPER FUNCTIONS ---
 function toggleVisibility(element, show) {
     if (show) {
@@ -145,8 +144,6 @@ function updateAddressLabel(locationName) {
     currentAddress.textContent = locationName;
 }
 
-
-
 function resetToMainMenu() {
     if (localTimeInterval) clearInterval(localTimeInterval); // Stop clock
     destinationTimezone = null; // Clear timezone
@@ -164,7 +161,6 @@ function resetToMainMenu() {
     toggleVisibility(tourSetupContainer, true);
     galleryGrid.innerHTML = ''; 
 }
-
 
 // --- 6. CORE TOUR LOGIC ---
 
@@ -231,33 +227,52 @@ async function processTourLoop() {
 
 // New function to validate and set Street View position with fallbacks
 async function setStreetViewPosition(stop) {
-    const location = stop.geometry.location;
+    const locationName = stop.locationName;
 
-    // Validate coordinates
-    if (!location || typeof location.lat !== 'number' || typeof location.lng !== 'number') {
-        console.warn(`Invalid coordinates for ${stop.locationName}, attempting geocoding fallback`);
-        await geocodeAndSetPosition(stop.locationName);
-        return;
-    }
+    return new Promise(async (resolve) => {
+        let targetLatLng;
 
-    return new Promise((resolve) => {
-        // Create a Street View service to check if panorama is available
+        // Step 1: Geocode the locationName to get robust coordinates
+        try {
+            const geocodeResults = await new Promise((geoResolve) => { // 'geoReject' removed
+                geocoder.geocode({ address: locationName }, (results, status) => {
+                    if (status === 'OK' && results[0]) {
+                        geoResolve(results[0].geometry.location);
+                    } else {
+                        // If geocoding fails, use Gemini's coordinates as a last resort, but log a warning.
+                        console.warn(`Geocoding failed for "${locationName}": ${status}. Falling back to Gemini's coordinates.`);
+                        geoResolve(stop.geometry.location); // Fallback to Gemini's original lat/lng
+                    }
+                });
+            });
+            targetLatLng = geocodeResults;
+        } catch (error) {
+            console.error("Error during initial geocoding:", error);
+            targetLatLng = stop.geometry.location; // Fallback to Gemini's original lat/lng if geocoding throws
+        }
+
+        // Basic validation for the targetLatLng object
+        if (!targetLatLng || typeof targetLatLng.lat !== 'function' || typeof targetLatLng.lng !== 'function') {
+            console.error(`Invalid targetLatLng after geocoding/fallback for ${locationName}. Cannot set Street View position.`);
+            resolve(); // Resolve to prevent tour from hanging
+            return;
+        }
+
+        // Step 2: Use the robust coordinates to find a Street View panorama
         const streetViewService = new google.maps.StreetViewService();
-
         streetViewService.getPanorama({
-            location: location,
-            radius: 100, // Search within 100 meters
+            location: targetLatLng, // Use the geocoded/fallback LatLng
+            radius: 500, // Increased radius to find a suitable panorama
             source: google.maps.StreetViewSource.OUTDOOR
         }, (data, status) => {
             if (status === 'OK') {
-                // Street View is available at this location
                 streetView.setPosition(data.location.latLng);
-                console.log(`Street View found for ${stop.locationName} at`, data.location.latLng.toJSON());
+                console.log(`Street View found for ${locationName} at`, data.location.latLng.toJSON());
             } else {
-                console.warn(`No Street View available for ${stop.locationName}, trying geocoding fallback`);
-                // Fallback to geocoding the location name
-                geocodeAndSetPosition(stop.locationName).then(resolve);
-                return;
+                console.warn(`No Street View available near geocoded location for "${locationName}". Setting view to geocoded coordinates.`);
+                // If no panorama found within radius, set directly to geocoded coordinates
+                // This might not have Street View, but it's the best we can do.
+                streetView.setPosition(targetLatLng);
             }
             resolve();
         });
