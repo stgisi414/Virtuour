@@ -1,7 +1,7 @@
 // --- 1. API KEY AND ENDPOINT CONFIGURATION ---
 // IMPORTANT: Replace placeholders with your actual API keys.
-const GEMINI_API_KEY = 'AIzaSyDIFeql6HUpkZ8JJlr_kuN0WDFHUyOhijA';
-const GOOGLE_API_KEY = 'AIzaSyAJ6YHA6SlQgqEYvJsR7t5ilMOkWiYnO'; // This is the same key used in index.html
+const GEMINI_API_KEY = 'AIzaSyDtLyUB-2wocE-uNG5e3pwNFArjn1GVTco';
+const GOOGLE_API_KEY = 'AIzaSyCYxnWpHNlzAz5h2W3pGTaW_oIP1ukTs1Y'; // This is the same key used in index.html
 const CUSTOM_SEARCH_ENGINE_ID = '16b67ee3373714c2b';
 
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-thinking-exp-01-21:generateContent?key=${GEMINI_API_KEY}`;
@@ -44,24 +44,23 @@ let synth = window.speechSynthesis;
 
 // --- 4. INITIALIZATION ---
 // This function is called by the Google Maps script tag once it's loaded.
-window.addEventListener('map-ready', () => {
-    try {
-        streetView = new google.maps.StreetViewPanorama(streetviewContainer, {
-            position: { lat: 40.7291, lng: -73.9965 }, // Default start
-            pov: { heading: 165, pitch: 0 },
-            zoom: 1,
-            visible: false,
-            addressControl: false,
-            linksControl: false,
-            fullscreenControl: false,
-            enableCloseButton: false,
-        });
-        directionsService = new google.maps.DirectionsService();
-        console.log('Google Maps initialized successfully');
-    } catch (error) {
-        console.error('Error initializing Google Maps:', error);
-    }
-});
+window.initMap = () => {
+    streetView = new google.maps.StreetViewPanorama(streetviewContainer, {
+        position: { lat: 40.7291, lng: -73.9965 }, // Default start
+        pov: { heading: 165, pitch: 0 },
+        zoom: 1,
+        visible: false,
+        addressControl: false,
+        linksControl: false,
+        fullscreenControl: false,
+        enableCloseButton: false,
+    });
+    directionsService = new google.maps.DirectionsService();
+
+    // --- Add these two lines ---
+    generateTourButton.disabled = false;
+    generateTourButton.textContent = 'Generate Tour';
+};
 
 generateTourButton.addEventListener('click', generateTour);
 
