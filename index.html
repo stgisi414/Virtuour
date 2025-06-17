@@ -21,11 +21,11 @@
     <main class="flex-grow relative flex justify-center items-center">
         <div id="tour-setup"
             class="flex flex-col gap-4 p-8 bg-slate-800/80 backdrop-blur-sm rounded-xl border border-slate-700 shadow-2xl shadow-black z-10 w-full max-w-lg transition-opacity duration-500">
-            
+
             <div class="flex flex-col sm:flex-row gap-4">
                 <input type="text" id="destinationInput" placeholder="Enter any city in the world..."
                     class="bg-slate-900 border-2 border-slate-600 focus:border-cyan-400 focus:ring-0 outline-none text-white placeholder:text-slate-500 rounded-lg p-4 text-center text-lg w-full transition-colors duration-300 flex-grow">
-                
+
                 <select id="tourFocus" class="bg-slate-900 border-2 border-slate-600 focus:border-cyan-400 focus:ring-0 outline-none text-white rounded-lg p-4 text-center text-lg w-full sm:w-auto transition-colors duration-300">
                     <option value="general">General Tour</option>
                     <option value="foodie">Foodie Tour</option>
@@ -43,14 +43,12 @@
         </div>
 
         <div id="streetview-container" class="absolute top-0 left-0 w-full h-full z-0"></div>
-        
-        <!-- Address label - top left -->
-        <div id="address-label" class="invisible opacity-0 absolute top-4 left-4 bg-slate-900/90 backdrop-blur-sm text-white px-4 py-2 rounded-lg shadow-lg border border-slate-600 font-semibold max-w-xs transition-opacity duration-300" style="z-index: 9999999;">
+
+        <div id="address-label" class="invisible opacity-0 z-50 absolute top-4 left-4 bg-slate-900/90 backdrop-blur-sm text-white px-4 py-2 rounded-lg shadow-lg border border-slate-600 font-semibold max-w-xs transition-opacity duration-300">
             <span id="current-address">Loading...</span>
         </div>
-        
-        <!-- Pause button - top right -->
-        <div id="pause-button-container" class="invisible opacity-0 absolute top-4 right-4 transition-opacity duration-300" style="z-index: 9999999;">
+
+        <div id="pause-button-container" class="invisible opacity-0 z-50 absolute top-4 right-4 transition-opacity duration-300">
             <button id="pauseTourButton" class="bg-red-500 hover:bg-red-400 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-red-400 transition-colors duration-300 flex items-center gap-2">
                 <span id="pause-icon">⏸️</span>
                 <span id="pause-text">Pause Tour</span>
@@ -78,7 +76,7 @@
                     New Tour
                 </button>
             </div>
-            
+
             <div id="local-info-container" class="flex-shrink-0 p-4 mb-4 bg-slate-800/50 rounded-lg text-center grid grid-cols-1 md:grid-cols-3 gap-4 border-2 border-slate-700">
                 <div>
                     <h3 class="font-bold text-cyan-400 uppercase tracking-wider">Local Time</h3>

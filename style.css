@@ -50,3 +50,18 @@
        to 'contain' (which shows the full image). */
     object-fit: contain;
 }
+
+#street-view-container {
+  position: relative;
+  width: 100%;
+  height: 500px;
+}
+
+#pause-tour-button,
+#address-label-button {
+  position: absolute;
+  top: 10px; /* Example positioning */
+  left: 10px;  /* Example positioning */
+  z-index: 10; /* A value higher than the Street View canvas */
+  /* Add other styling for your buttons */
+}

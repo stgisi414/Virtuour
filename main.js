@@ -141,11 +141,6 @@ function togglePause() {
 
 function updateAddressLabel(locationName) {
     currentAddress.textContent = locationName;
-    // Force full visibility
-    addressLabel.className = 'absolute top-4 left-4 bg-slate-900/90 backdrop-blur-sm text-white px-4 py-2 rounded-lg shadow-lg border border-slate-600 font-semibold max-w-xs transition-opacity duration-300';
-    addressLabel.style.display = 'block';
-    addressLabel.style.opacity = '1';
-    addressLabel.style.zIndex = '9999999';
 }
 
 function resetToMainMenu() {
@@ -171,7 +166,7 @@ function resetToMainMenu() {
 
 async function generateTour() {
     currentDestination = destinationInput.value.trim();
-    const selectedFocus = tourFocus.value; // <-- ADDED
+    const selectedFocus = tourFocus.value;
     if (!currentDestination) {
         alert('Please enter a destination city.');
         return;
@@ -180,32 +175,21 @@ async function generateTour() {
     toggleVisibility(tourSetupContainer, false);
 
     try {
-        // Pass the selected focus to the itinerary fetcher
-        tourItinerary = await fetchItinerary(currentDestination, selectedFocus); // <-- MODIFIED
+        tourItinerary = await fetchItinerary(currentDestination, selectedFocus);
         if (!tourItinerary || tourItinerary.length === 0) {
             throw new Error("The generated itinerary is empty.");
         }
 
         toggleVisibility(streetviewContainer, true);
         streetView.setVisible(true);
-        
-        // Force pause button visibility
-        pauseButtonContainer.className = 'absolute top-4 right-4 transition-opacity duration-300';
-        pauseButtonContainer.style.display = 'block';
-        pauseButtonContainer.style.opacity = '1';
-        pauseButtonContainer.style.zIndex = '9999999';
-        
-        // Force address label visibility
-        addressLabel.className = 'absolute top-4 left-4 bg-slate-900/90 backdrop-blur-sm text-white px-4 py-2 rounded-lg shadow-lg border border-slate-600 font-semibold max-w-xs transition-opacity duration-300';
-        addressLabel.style.display = 'block';
-        addressLabel.style.opacity = '1';
-        addressLabel.style.zIndex = '9999999';
-        
+
+        toggleVisibility(pauseButtonContainer, true);
+        toggleVisibility(addressLabel, true);
+
         currentStopIndex = 0;
         await processTourLoop();
     } catch (error) {
         console.error('Error generating tour:', error);
-        // The alert will now show the user-friendly error from the API
         alert(`Failed to generate tour. ${error.message}`);
         setLoading(false);
         resetToMainMenu();
@@ -242,7 +226,7 @@ async function processTourLoop() {
 // New function to validate and set Street View position with fallbacks
 async function setStreetViewPosition(stop) {
     const location = stop.geometry.location;
-    
+
     // Validate coordinates
     if (!location || typeof location.lat !== 'number' || typeof location.lng !== 'number') {
         console.warn(`Invalid coordinates for ${stop.locationName}, attempting geocoding fallback`);
@@ -253,7 +237,7 @@ async function setStreetViewPosition(stop) {
     return new Promise((resolve) => {
         // Create a Street View service to check if panorama is available
         const streetViewService = new google.maps.StreetViewService();
-        
+
         streetViewService.getPanorama({
             location: location,
             radius: 100, // Search within 100 meters
@@ -281,7 +265,7 @@ async function geocodeAndSetPosition(locationName) {
             if (status === 'OK' && results[0]) {
                 const geocodedLocation = results[0].geometry.location;
                 console.log(`Geocoded ${locationName} to`, geocodedLocation.toJSON());
-                
+
                 // Check if Street View is available at geocoded location
                 const streetViewService = new google.maps.StreetViewService();
                 streetViewService.getPanorama({
