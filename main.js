@@ -23,7 +23,8 @@ let currentStopIndex = 0;
 let synth = window.speechSynthesis;
 
 // --- 4. INITIALIZATION ---
-window.initMap = () => {
+// This function is called by the global initMap function in index.html
+window.initializeTourApp = () => {
     streetView = new google.maps.StreetViewPanorama(streetviewContainer, {
         position: { lat: 40.7291, lng: -73.9965 },
         pov: { heading: 165, pitch: 0 },

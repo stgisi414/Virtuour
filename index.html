@@ -19,28 +19,45 @@
     </header>
 
     <main class="flex-grow relative flex justify-center items-center">
-        <div id="tour-setup" class="flex flex-col gap-4 p-8 bg-slate-800/80 backdrop-blur-sm rounded-xl border border-slate-700 shadow-2xl shadow-black z-10 w-full max-w-md transition-opacity duration-500">
-            <input type="text" id="destinationInput" placeholder="Enter any city in the world..." class="bg-slate-900 border-2 border-slate-600 focus:border-cyan-400 focus:ring-0 outline-none text-white placeholder:text-slate-500 rounded-lg p-4 text-center text-lg w-full transition-colors duration-300">
-            <button id="generateTourButton" disabled class="bg-cyan-400 disabled:bg-slate-600 disabled:text-slate-400 text-slate-900 font-bold py-3 px-6 rounded-lg hover:bg-cyan-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-cyan-400 transition-all duration-300 text-lg uppercase tracking-wider">
+        <div id="tour-setup"
+            class="flex flex-col gap-4 p-8 bg-slate-800/80 backdrop-blur-sm rounded-xl border border-slate-700 shadow-2xl shadow-black z-10 w-full max-w-md transition-opacity duration-500">
+            <input type="text" id="destinationInput" placeholder="Enter any city in the world..."
+                class="bg-slate-900 border-2 border-slate-600 focus:border-cyan-400 focus:ring-0 outline-none text-white placeholder:text-slate-500 rounded-lg p-4 text-center text-lg w-full transition-colors duration-300">
+            <button id="generateTourButton" disabled
+                class="bg-cyan-400 disabled:bg-slate-600 disabled:text-slate-400 text-slate-900 font-bold py-3 px-6 rounded-lg hover:bg-cyan-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-cyan-400 transition-all duration-300 text-lg uppercase tracking-wider">
                 Loading Map...
             </button>
         </div>
 
         <div id="streetview-container" class="absolute top-0 left-0 w-full h-full z-0"></div>
 
-        <div id="tour-information" class="invisible opacity-0 absolute bottom-0 left-0 w-full bg-slate-900/80 backdrop-blur-md z-[5] flex items-center justify-center p-4 md:p-6 transition-all duration-700 ease-in-out">
+        <div id="tour-information"
+            class="invisible opacity-0 absolute bottom-0 left-0 w-full bg-slate-900/80 backdrop-blur-md z-[5] flex items-center justify-center p-4 md:p-6 transition-all duration-700 ease-in-out">
             <div id="subtitles-container" class="text-center text-lg md:text-xl font-semibold text-shadow">
-                </div>
+            </div>
         </div>
-        
-        <div id="loading-indicator" class="invisible opacity-0 absolute top-0 left-0 w-full h-full bg-slate-900/80 backdrop-blur-sm flex flex-col justify-center items-center z-20 transition-opacity duration-500 ease-in-out">
+
+        <div id="loading-indicator"
+            class="invisible opacity-0 absolute top-0 left-0 w-full h-full bg-slate-900/80 backdrop-blur-sm flex flex-col justify-center items-center z-20 transition-opacity duration-500 ease-in-out">
             <div class="spinner"></div>
             <p id="loading-text" class="mt-4 text-lg text-slate-400">Generating Itinerary...</p>
         </div>
     </main>
 
-    <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCYxnWpHNlzAz5h2W3pGTaW_oIP1ukTs1Y&callback=initMap&libraries=places"></script>
+    <script>
+        function initMap() {
+            // The Google Maps script has loaded. Now, we can safely call the main
+            // initialization logic which is located in our main.js file.
+            window.initializeTourApp();
+        }
+    </script>
+
+    <script async
+        src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCYxnWpHNlzAz5h2W3pGTaW_oIP1ukTs1Y&callback=initMap&libraries=places">
+        </script>
+
     <script src="main.js"></script>
 
 </body>
+
 </html>
