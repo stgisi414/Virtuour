@@ -29,6 +29,14 @@ const localTime = document.getElementById('local-time');
 const localWeather = document.getElementById('local-weather');
 const localNews = document.getElementById('local-news');
 
+// New controls
+const addressLabel = document.getElementById('address-label');
+const currentAddress = document.getElementById('current-address');
+const pauseButtonContainer = document.getElementById('pause-button-container');
+const pauseTourButton = document.getElementById('pauseTourButton');
+const pauseIcon = document.getElementById('pause-icon');
+const pauseText = document.getElementById('pause-text');
+
 // --- 3. GLOBAL VARIABLES ---
 let streetView;
 let directionsService;
@@ -39,6 +47,8 @@ let synth = window.speechSynthesis;
 let currentDestination = '';
 let localTimeInterval = null; // For the clock
 let destinationTimezone = null; // NEW: To store the destination's timezone
+let tourPaused = false; // Track if tour is paused
+let currentPauseResolve = null; // For pause functionality
 
 // --- 4. INITIALIZATION ---
 window.initializeTourApp = () => {
@@ -63,6 +73,7 @@ window.initializeTourApp = () => {
 
 generateTourButton.addEventListener('click', generateTour);
 endTourButton.addEventListener('click', resetToMainMenu);
+pauseTourButton.addEventListener('click', togglePause);
 
 
 // --- 5. HELPER FUNCTIONS ---
@@ -111,11 +122,36 @@ function updateLocalTime(element) {
     }, 1000);
 }
 
+function togglePause() {
+    tourPaused = !tourPaused;
+    if (tourPaused) {
+        pauseIcon.textContent = '▶️';
+        pauseText.textContent = 'Resume Tour';
+        pauseTourButton.className = 'bg-green-500 hover:bg-green-400 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-green-400 transition-colors duration-300 flex items-center gap-2';
+    } else {
+        pauseIcon.textContent = '⏸️';
+        pauseText.textContent = 'Pause Tour';
+        pauseTourButton.className = 'bg-red-500 hover:bg-red-400 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-red-400 transition-colors duration-300 flex items-center gap-2';
+        if (currentPauseResolve) {
+            currentPauseResolve();
+            currentPauseResolve = null;
+        }
+    }
+}
+
+function updateAddressLabel(locationName) {
+    currentAddress.textContent = locationName;
+    toggleVisibility(addressLabel, true);
+}
+
 function resetToMainMenu() {
     if (localTimeInterval) clearInterval(localTimeInterval); // Stop clock
     destinationTimezone = null; // Clear timezone
+    tourPaused = false; // Reset pause state
     toggleVisibility(galleryContainer, false);
     toggleVisibility(streetviewContainer, false); 
+    toggleVisibility(addressLabel, false);
+    toggleVisibility(pauseButtonContainer, false);
     streetView.setVisible(false);
     toggleVisibility(tourInfoContainer, false);
 
@@ -148,6 +184,7 @@ async function generateTour() {
 
         toggleVisibility(streetviewContainer, true);
         streetView.setVisible(true);
+        toggleVisibility(pauseButtonContainer, true);
         currentStopIndex = 0;
         await processTourLoop();
     } catch (error) {
@@ -161,7 +198,15 @@ async function generateTour() {
 
 async function processTourLoop() {
     while (currentStopIndex < tourItinerary.length) {
+        // Check for pause before processing each stop
+        if (tourPaused) {
+            await new Promise(resolve => {
+                currentPauseResolve = resolve;
+            });
+        }
+
         const currentStop = tourItinerary[currentStopIndex];
+        updateAddressLabel(currentStop.locationName);
 
         if (currentStopIndex === 0) {
             setLoading(true, `Going to the first stop: ${currentStop.locationName}`);
