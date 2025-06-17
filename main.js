@@ -169,29 +169,41 @@ function togglePause() {
 async function exploreLocation() {
     const currentStop = tourItinerary[currentStopIndex];
     if (!currentStop) return;
+
     setLoading(true, `Looking for an inside view of ${currentStop.locationName}...`);
+
     const request = {
         query: `${currentStop.locationName}, ${currentDestination}`,
-        fields: ['name', 'place_id'],
+        fields: ['place_id'], // We only need the place_id for the next step
         locationBias: currentStop.geometry.location
     };
+
+    // Step 1: Use the PlacesService to find the unique Place ID.
     placesService.findPlaceFromQuery(request, (results, status) => {
         if (status === google.maps.places.PlacesServiceStatus.OK && results[0] && results[0].place_id) {
             const placeId = results[0].place_id;
-            placesService.getDetails({ placeId: placeId, fields: ['pano'] }, (place, status) => {
-                if (status === google.maps.places.PlacesServiceStatus.OK && place && place.pano) {
-                    originalStreetViewLocation = streetView.getLocation();
-                    streetView.setPano(place.pano);
+
+            // Step 2: CORRECTED - Use the StreetViewService to get the panorama associated with the Place ID.
+            const streetViewService = new google.maps.StreetViewService();
+            streetViewService.getPanorama({ placeId: placeId }, (data, status) => {
+                if (status === 'OK') {
+                    // A panorama was found!
+                    originalStreetViewLocation = streetView.getLocation(); // Save our spot on the street
+                    streetView.setPano(data.location.pano); // Jump to the interior view
+
+                    // Update the UI for "Explore Mode"
                     exploreButton.style.display = 'none';
                     pauseTourButton.style.display = 'none';
                     returnToTourButton.style.display = 'flex';
                     setLoading(false);
                 } else {
+                    // This handles cases where a place exists but has no interior panorama.
                     setLoading(false);
                     alert("Sorry, an interior view isn't available for this location.");
                 }
             });
         } else {
+            // This handles cases where the place couldn't be found at all.
             setLoading(false);
             alert("Sorry, we couldn't find specific details for this location.");
         }
