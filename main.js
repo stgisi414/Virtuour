@@ -185,8 +185,8 @@ async function generateTour() {
 
         toggleVisibility(pauseButtonContainer, true);
         toggleVisibility(addressLabel, true);
-        
-        
+
+
 
         currentStopIndex = 0;
         await processTourLoop();
@@ -356,8 +356,8 @@ async function processLocation(location) {
     synth.cancel();
     subtitlesContainer.textContent = `${location.locationName}: ${location.briefDescription}`;
     toggleVisibility(tourInfoContainer, true);
-    
-    
+
+
 
     return new Promise((resolve) => {
         if ('speechSynthesis' in window) {
@@ -572,6 +572,8 @@ async function fetchNewsOutlets(query) {
 async function showFinalGallery(destination) {
     toggleVisibility(streetviewContainer, false);
     streetView.setVisible(false);
+    toggleVisibility(pauseButtonContainer, false);
+    toggleVisibility(addressLabel, false);
     setLoading(true, 'Curating gallery and local information...');
 
     try {
@@ -586,9 +588,6 @@ async function showFinalGallery(destination) {
         // Set timezone and start the clock
         destinationTimezone = localInfo.timezone;
         updateLocalTime(localTime);
-
-        // Populate Weather
-        localWeather.textContent = localInfo.weather ? `${localInfo.weather.emoji} ${localInfo.weather.text}` : 'Unavailable';
 
         // ... rest of the function is the same
         populateNews(news, localNews);
