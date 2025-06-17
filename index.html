@@ -48,7 +48,15 @@
             <span id="current-address">Loading...</span>
         </div>
 
-        <div id="pause-button-container" class="invisible opacity-0 absolute z-10 transition-all duration-300">
+        <div id="controls-container" class="invisible opacity-0 absolute z-10 transition-all duration-300 flex gap-4">
+             <button id="exploreButton" class="bg-purple-500 hover:bg-purple-400 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-purple-400 transition-colors duration-300 flex items-center gap-2">
+                🧭
+                <span>Explore Inside</span>
+            </button>
+            <button id="returnToTourButton" class="bg-orange-500 hover:bg-orange-400 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-orange-400 transition-colors duration-300 flex items-center gap-2">
+                ↩️
+                <span>Return to Tour</span>
+            </button>
             <button id="pauseTourButton" class="bg-red-500 hover:bg-red-400 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-red-400 transition-colors duration-300 flex items-center gap-2">
                 <span id="pause-icon">⏸️</span>
                 <span id="pause-text">Pause Tour</span>
