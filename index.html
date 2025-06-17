@@ -1,16 +1,40 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width">
-  <title>replit</title>
-  <link href="style.css" rel="stylesheet" type="text/css" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Virtual Tour Guide</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
 </head>
-
 <body>
-  Hello world
-  <script src="script.js"></script>
-</body>
+    <header>
+        <h1>AI Virtual Tour Guide</h1>
+    </header>
 
+    <main>
+        <div id="tour-setup">
+            <input type="text" id="destinationInput" placeholder="Enter a city (e.g., 'Rome')">
+            <button id="generateTourButton">Generate Tour</button>
+        </div>
+
+        <div id="streetview-container"></div>
+
+        <div id="tour-information" class="hidden">
+            <div id="slideshow-container"></div>
+            <div id="subtitles-container"></div>
+        </div>
+
+        <div id="loading-indicator" class="hidden">
+            <div class="spinner"></div>
+            <p id="loading-text">Generating Itinerary...</p>
+        </div>
+    </main>
+
+    <script src="main.js" type="module"></script>
+    
+    <script async src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAJ6YHA6SlQgqEYvJsR7t5ilMOkWiYnO&libraries=streetview,places&callback=initMap"></script>
+</body>
 </html>
