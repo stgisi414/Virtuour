@@ -20,9 +20,22 @@
 
     <main class="flex-grow relative flex justify-center items-center">
         <div id="tour-setup"
-            class="flex flex-col gap-4 p-8 bg-slate-800/80 backdrop-blur-sm rounded-xl border border-slate-700 shadow-2xl shadow-black z-10 w-full max-w-md transition-opacity duration-500">
-            <input type="text" id="destinationInput" placeholder="Enter any city in the world..."
-                class="bg-slate-900 border-2 border-slate-600 focus:border-cyan-400 focus:ring-0 outline-none text-white placeholder:text-slate-500 rounded-lg p-4 text-center text-lg w-full transition-colors duration-300">
+            class="flex flex-col gap-4 p-8 bg-slate-800/80 backdrop-blur-sm rounded-xl border border-slate-700 shadow-2xl shadow-black z-10 w-full max-w-lg transition-opacity duration-500">
+            
+            <div class="flex flex-col sm:flex-row gap-4">
+                <input type="text" id="destinationInput" placeholder="Enter any city in the world..."
+                    class="bg-slate-900 border-2 border-slate-600 focus:border-cyan-400 focus:ring-0 outline-none text-white placeholder:text-slate-500 rounded-lg p-4 text-center text-lg w-full transition-colors duration-300 flex-grow">
+                
+                <select id="tourFocus" class="bg-slate-900 border-2 border-slate-600 focus:border-cyan-400 focus:ring-0 outline-none text-white rounded-lg p-4 text-center text-lg w-full sm:w-auto transition-colors duration-300">
+                    <option value="general">General Tour</option>
+                    <option value="foodie">Foodie Tour</option>
+                    <option value="history">History Tour</option>
+                    <option value="nature">Nature Tour</option>
+                    <option value="art">Art & Culture</option>
+                    <option value="hidden_gems">Hidden Gems</option>
+                </select>
+            </div>
+
             <button id="generateTourButton" disabled
                 class="bg-cyan-400 disabled:bg-slate-600 disabled:text-slate-400 text-slate-900 font-bold py-3 px-6 rounded-lg hover:bg-cyan-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-800 focus:ring-cyan-400 transition-all duration-300 text-lg uppercase tracking-wider">
                 Loading Map...
@@ -52,8 +65,24 @@
                     New Tour
                 </button>
             </div>
+            
+            <div id="local-info-container" class="flex-shrink-0 p-4 mb-4 bg-slate-800/50 rounded-lg text-center grid grid-cols-1 md:grid-cols-3 gap-4 border-2 border-slate-700">
+                <div>
+                    <h3 class="font-bold text-cyan-400 uppercase tracking-wider">Local Time</h3>
+                    <p id="local-time" class="text-lg font-mono">-</p>
+                </div>
+                <div>
+                    <h3 class="font-bold text-cyan-400 uppercase tracking-wider">Local Weather</h3>
+                    <p id="local-weather" class="text-lg">-</p>
+                </div>
+                <div>
+                    <h3 class="font-bold text-cyan-400 uppercase tracking-wider">Local News</h3>
+                    <div id="local-news" class="text-sm space-y-1 overflow-y-auto max-h-24"></div>
+                </div>
+            </div>
+
             <div id="gallery-grid"
-                class="flex-grow overflow-y-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                class="flex-grow overflow-y-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-2">
             </div>
         </div>
 
@@ -61,8 +90,6 @@
 
     <script>
         function initMap() {
-            // The Google Maps script has loaded. Now, we can safely call the main
-            // initialization logic which is located in our main.js file.
             window.initializeTourApp();
         }
     </script>

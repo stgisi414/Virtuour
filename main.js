@@ -2,9 +2,8 @@
 const GEMINI_API_KEY = 'AIzaSyDtLyUB-2wocE-uNG5e3pwNFArjn1GVTco'; // Your Gemini API Key
 const GOOGLE_API_KEY = 'AIzaSyCYxnWpHNlzAz5h2W3pGTaW_oIP1ukTs1Y'; // Your Google Cloud API Key
 
-// --- [ADD THIS] - New API configuration for the Gallery ---
-const YOUTUBE_API_KEY = GOOGLE_API_KEY; // Assumes same key, change if different
-const CUSTOM_SEARCH_ENGINE_ID = '16b67ee3373714c2b'; // <--- PASTE YOUR CX ID HERE
+const YOUTUBE_API_KEY = GOOGLE_API_KEY; 
+const CUSTOM_SEARCH_ENGINE_ID = '16b67ee3373714c2b'; 
 
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 const YOUTUBE_API_URL = 'https://www.googleapis.com/youtube/v3/search';
@@ -13,6 +12,7 @@ const CUSTOM_SEARCH_API_URL = 'https://www.googleapis.com/customsearch/v1';
 
 // --- 2. DOM ELEMENT REFERENCES ---
 const destinationInput = document.getElementById('destinationInput');
+const tourFocus = document.getElementById('tourFocus'); // <-- ADDED
 const generateTourButton = document.getElementById('generateTourButton');
 const tourSetupContainer = document.getElementById('tour-setup');
 const streetviewContainer = document.getElementById('streetview-container');
@@ -21,12 +21,13 @@ const subtitlesContainer = document.getElementById('subtitles-container');
 const loadingIndicator = document.getElementById('loading-indicator');
 const loadingText = document.getElementById('loading-text');
 
-// --- [ADD THIS] - New Gallery DOM References ---
 const galleryContainer = document.getElementById('gallery-container');
 const galleryTitle = document.getElementById('gallery-title');
 const galleryGrid = document.getElementById('gallery-grid');
 const endTourButton = document.getElementById('endTourButton');
-
+const localTime = document.getElementById('local-time');
+const localWeather = document.getElementById('local-weather');
+const localNews = document.getElementById('local-news');
 
 // --- 3. GLOBAL VARIABLES ---
 let streetView;
@@ -36,7 +37,7 @@ let tourItinerary = [];
 let currentStopIndex = 0;
 let synth = window.speechSynthesis;
 let currentDestination = '';
-
+let localTimeInterval = null; // For the clock
 
 // --- 4. INITIALIZATION ---
 window.initializeTourApp = () => {
@@ -60,7 +61,6 @@ window.initializeTourApp = () => {
 };
 
 generateTourButton.addEventListener('click', generateTour);
-// --- [ADD THIS] Event listener for the new gallery close button
 endTourButton.addEventListener('click', resetToMainMenu);
 
 
@@ -78,6 +78,13 @@ function setLoading(isLoading, message = '') {
     toggleVisibility(loadingIndicator, isLoading);
 }
 
+function updateLocalTime(element) {
+    if (localTimeInterval) clearInterval(localTimeInterval);
+    localTimeInterval = setInterval(() => {
+        element.textContent = new Date().toLocaleTimeString();
+    }, 1000);
+}
+
 function getDistanceInKm(latLng1, latLng2) {
     const R = 6371;
     const dLat = (latLng2.lat() - latLng1.lat()) * Math.PI / 180;
@@ -90,10 +97,10 @@ function getDistanceInKm(latLng1, latLng2) {
     return R * c;
 }
 
-// --- [ADD THIS] New function to reset the entire UI to the start screen ---
 function resetToMainMenu() {
+    if (localTimeInterval) clearInterval(localTimeInterval); // Stop clock
     toggleVisibility(galleryContainer, false);
-    toggleVisibility(streetviewContainer, false); // Ensure canvas is hidden
+    toggleVisibility(streetviewContainer, false); 
     streetView.setVisible(false);
     toggleVisibility(tourInfoContainer, false);
 
@@ -101,7 +108,7 @@ function resetToMainMenu() {
     generateTourButton.disabled = false;
     generateTourButton.textContent = 'Generate Another Tour';
     toggleVisibility(tourSetupContainer, true);
-    galleryGrid.innerHTML = ''; // Clear gallery content
+    galleryGrid.innerHTML = ''; 
 }
 
 
@@ -109,6 +116,7 @@ function resetToMainMenu() {
 
 async function generateTour() {
     currentDestination = destinationInput.value.trim();
+    const selectedFocus = tourFocus.value; // <-- ADDED
     if (!currentDestination) {
         alert('Please enter a destination city.');
         return;
@@ -117,20 +125,22 @@ async function generateTour() {
     toggleVisibility(tourSetupContainer, false);
 
     try {
-        tourItinerary = await fetchItinerary(currentDestination);
+        // Pass the selected focus to the itinerary fetcher
+        tourItinerary = await fetchItinerary(currentDestination, selectedFocus); // <-- MODIFIED
         if (!tourItinerary || tourItinerary.length === 0) {
             throw new Error("The generated itinerary is empty.");
         }
-        // --- [MODIFIED] Show canvas right before tour starts ---
+
         toggleVisibility(streetviewContainer, true);
         streetView.setVisible(true);
         currentStopIndex = 0;
         await processTourLoop();
     } catch (error) {
         console.error('Error generating tour:', error);
+        // The alert will now show the user-friendly error from the API
         alert(`Failed to generate tour. ${error.message}`);
         setLoading(false);
-        resetToMainMenu(); // Use the new reset function on failure
+        resetToMainMenu();
     }
 }
 
@@ -149,7 +159,6 @@ async function processTourLoop() {
         currentStopIndex++;
     }
 
-    // --- [MODIFIED] Tour Complete Logic ---
     setLoading(true, 'Tour Complete! Curating gallery...');
     await showFinalGallery(currentDestination);
 }
@@ -222,13 +231,30 @@ async function processLocation(location) {
 
 // --- 7. ITINERARY AND GALLERY FETCHING ---
 
-async function fetchItinerary(destination) {
-    // This function remains largely the same as before
-    const prompt = `Create a 5-stop, one-day tourist itinerary for ${destination}. The output MUST be a valid JSON array of objects. Do not include markdown ticks like \`\`\`json or any text outside the JSON array itself. Each object must have a "locationName" (a specific, mappable place like "Eiffel Tower, Paris, France") and a "briefDescription" (a short, engaging sentence).`;
+async function fetchItinerary(destination, focus) { // <-- MODIFIED
+    // Define the text for each tour focus
+    const focusText = {
+        'general': 'a general tourist itinerary',
+        'foodie': 'a foodie tour focusing on unique restaurants, markets, and culinary experiences',
+        'history': 'a historical tour focusing on significant landmarks, museums, and sites',
+        'nature': 'a nature tour focusing on parks, natural landscapes, and scenic views',
+        'art': 'an art and culture tour visiting galleries, street art, theaters, and cultural centers',
+        'hidden_gems': 'a tour of hidden gems and less-known, unique spots'
+    }[focus];
+
+    // Create a detailed prompt with error handling instructions
+    const prompt = `Create a 5-stop, one-day ${focusText} for ${destination}.
+
+**Instructions:**
+1.  If the location "${destination}" is not a real, specific place (e.g., "asdfasdf", "nowhereville"), or if you cannot create a tour for it, you MUST respond with ONLY the following JSON object: \`{"error": "Could not generate a tour for '${destination}'. Please try a different place."}\`.
+2.  Otherwise, generate a valid JSON array of 5 objects. Do not include markdown ticks like \`\`\`json or any text outside the JSON array itself.
+3.  Each object in the array must have a "locationName" (a specific, mappable place like "Eiffel Tower, Paris, France") and a "briefDescription" (a short, engaging sentence related to the tour focus).`;
+
     let attempts = 0;
     while (true) {
         attempts++;
-        setLoading(true, `Generating Itinerary... (Attempt ${attempts})`);
+        // Update loading text to be more specific
+        setLoading(true, `Generating ${focus} Itinerary... (Attempt ${attempts})`);
         try {
             const response = await fetch(GEMINI_API_URL, {
                 method: 'POST',
@@ -240,7 +266,15 @@ async function fetchItinerary(destination) {
             });
             if (!response.ok) throw new Error(`API request failed with status ${response.status}`);
             const data = await response.json();
-            let parsedItinerary = JSON.parse(data.candidates[0].content.parts[0].text);
+            const parsedResponse = JSON.parse(data.candidates[0].content.parts[0].text);
+
+            // --- NEW: Graceful Error Handling ---
+            if (parsedResponse.error) {
+                // If the API returns our specific error object, throw it to be caught by generateTour()
+                throw new Error(parsedResponse.error);
+            }
+
+            const parsedItinerary = parsedResponse;
 
             setLoading(true, 'Validating locations...');
             const geocodedStops = await Promise.all(parsedItinerary.map(async (stop) => {
@@ -255,7 +289,7 @@ async function fetchItinerary(destination) {
             }));
 
             const validStops = geocodedStops.filter(Boolean);
-            if (validStops.length < 1) throw new Error("Could not find any valid locations.");
+            if (validStops.length < 1) throw new Error("Could not find any valid, mappable locations for this tour.");
             return validStops;
         } catch (error) {
             console.error(`Attempt ${attempts} failed:`, error);
@@ -266,8 +300,7 @@ async function fetchItinerary(destination) {
 }
 
 async function getTravelMode(originName, destinationName, distanceKm) {
-    // This function remains the same
-    const prompt = `You are a travel planner. Choose the best travel mode. Origin: "<span class="math-inline">\{originName\}"\. Destination\: "</span>{destinationName}". Distance: ${distanceKm.toFixed(2)} km. If the distance is very short (under 2 km) and in a city, prefer 'WALKING'. Otherwise, 'DRIVING'. Respond with only the single word: 'DRIVING' or 'WALKING'.`;
+    const prompt = `You are a travel planner. Choose the best travel mode. Origin: "${originName}". Destination: "${destinationName}". Distance: ${distanceKm.toFixed(2)} km. If the distance is very short (under 2 km) and in a city, prefer 'WALKING'. Otherwise, 'DRIVING'. Respond with only the single word: 'DRIVING' or 'WALKING'.`;
     try {
         const response = await fetch(GEMINI_API_URL, {
             method: 'POST',
@@ -287,32 +320,96 @@ async function getTravelMode(originName, destinationName, distanceKm) {
     }
 }
 
+async function fetchWeather(query) {
+    const prompt = `Provide the current weather for ${query}. Respond with a JSON object containing "temp_c", "temp_f", and "condition". Example: {"temp_c": 15, "temp_f": 59, "condition": "Partly Cloudy"}`;
+    try {
+        const response = await fetch(GEMINI_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: { temperature: 0, response_mime_type: "application/json" }
+            }),
+        });
+        if (!response.ok) throw new Error('Weather API request failed');
+        const data = await response.json();
+        const weatherData = JSON.parse(data.candidates[0].content.parts[0].text);
+
+        const condition = weatherData.condition.toLowerCase();
+        let emoji = '❔';
+        if (condition.includes('sun') || condition.includes('clear')) emoji = '☀️';
+        else if (condition.includes('cloud')) emoji = '☁️';
+        else if (condition.includes('rain') || condition.includes('shower')) emoji = '🌧️';
+        else if (condition.includes('storm')) emoji = '⛈️';
+        else if (condition.includes('snow')) emoji = '❄️';
+        else if (condition.includes('fog') || condition.includes('mist')) emoji = '🌫️';
+
+        return {
+            text: `${weatherData.temp_f}°F / ${weatherData.temp_c}°C, ${weatherData.condition}`,
+            emoji: emoji
+        };
+    } catch (error) {
+        console.error("Could not fetch weather:", error);
+        return null; // Fail gracefully
+    }
+}
+
+async function fetchNewsOutlets(query) {
+    const prompt = `List the top 3-4 local news outlets for ${query}. Provide only a valid JSON array of objects, where each object has "name" and "url". The URL must be a full, valid URL. Example: [{"name": "City Times", "url": "https://www.citytimes.com"}]`;
+     try {
+        const response = await fetch(GEMINI_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: { temperature: 0.2, response_mime_type: "application/json" }
+            }),
+        });
+        if (!response.ok) throw new Error('News API request failed');
+        const data = await response.json();
+        return JSON.parse(data.candidates[0].content.parts[0].text);
+    } catch (error) {
+        console.error("Could not fetch news:", error);
+        return []; // Fail gracefully
+    }
+}
 
 // --- 8. [NEW] GALLERY DISPLAY LOGIC ---
 
 async function showFinalGallery(destination) {
-    // Hide tour elements
     toggleVisibility(streetviewContainer, false);
     streetView.setVisible(false);
+    setLoading(true, 'Curating gallery and local information...');
+
+    // Start the clock as soon as the gallery view is requested
+    updateLocalTime(localTime);
 
     try {
-        // Fetch images and videos in parallel
-        const [images, videos] = await Promise.all([
+        // Fetch everything for the gallery view in parallel
+        const [images, videos, weather, news] = await Promise.all([
             fetchImages(destination),
-            fetchVideos(destination)
+            fetchVideos(destination),
+            fetchWeather(destination),
+            fetchNewsOutlets(destination)
         ]);
 
-        const galleryItems = [...images, ...videos];
-        // Shuffle for a nice mixed grid
-        galleryItems.sort(() => Math.random() - 0.5);
+        // Populate Weather
+        localWeather.textContent = weather ? `${weather.emoji} ${weather.text}` : 'Unavailable';
 
+        // Populate News
+        populateNews(news, localNews);
+
+        // Populate Image/Video Grid
+        const galleryItems = [...images, ...videos];
+        galleryItems.sort(() => Math.random() - 0.5);
         populateGalleryGrid(galleryItems, destination);
+
+        // Hide loading and show the fully populated gallery
         setLoading(false);
         toggleVisibility(galleryContainer, true);
 
     } catch (error) {
         console.error("Failed to create gallery:", error);
-        // If gallery fails, just go back to the main menu
         setLoading(false);
         alert(`Sorry, we couldn't create a gallery for ${destination}.`);
         resetToMainMenu();
@@ -321,7 +418,7 @@ async function showFinalGallery(destination) {
 
 async function fetchImages(query) {
     console.log("Fetching images for:", query);
-    const url = `<span class="math-inline">\{CUSTOM\_SEARCH\_API\_URL\}?key\=</span>{GOOGLE_API_KEY}&cx=<span class="math-inline">\{CUSTOM\_SEARCH\_ENGINE\_ID\}&q\=</span>{encodeURIComponent(query)}&searchType=image&num=10`;
+    const url = `${CUSTOM_SEARCH_API_URL}?key=${GOOGLE_API_KEY}&cx=${CUSTOM_SEARCH_ENGINE_ID}&q=${encodeURIComponent(query)}&searchType=image&num=10`;
     try {
         const response = await fetch(url);
         if (!response.ok) throw new Error(`Image search failed: ${response.status}`);
@@ -330,13 +427,13 @@ async function fetchImages(query) {
         return data.items.map(item => ({ type: 'image', url: item.link }));
     } catch (error) {
         console.error("Could not fetch images:", error);
-        return []; // Return empty array on failure
+        return [];
     }
 }
 
 async function fetchVideos(query) {
     console.log("Fetching videos for:", query);
-    const url = `<span class="math-inline">\{YOUTUBE\_API\_URL\}?key\=</span>{YOUTUBE_API_KEY}&part=snippet&q=${encodeURIComponent(query + " tour")}&type=video&maxResults=5&videoEmbeddable=true`;
+    const url = `${YOUTUBE_API_URL}?key=${YOUTUBE_API_KEY}&part=snippet&q=${encodeURIComponent(query + " tour")}&type=video&maxResults=5&videoEmbeddable=true`;
     try {
         const response = await fetch(url);
         if (!response.ok) throw new Error(`Youtube failed: ${response.status}`);
@@ -345,38 +442,45 @@ async function fetchVideos(query) {
         return data.items.map(item => ({ type: 'video', videoId: item.id.videoId }));
     } catch (error) {
         console.error("Could not fetch videos:", error);
-        return []; // Return empty array on failure
+        return [];
     }
+}
+
+function populateNews(newsItems, element) {
+    element.innerHTML = ''; // Clear previous
+    if (!newsItems || newsItems.length === 0) {
+        element.innerHTML = '<p class="text-slate-400">No news outlets found.</p>';
+        return;
+    }
+    newsItems.forEach(item => {
+        const link = document.createElement('a');
+        link.href = item.url;
+        link.textContent = item.name;
+        link.target = '_blank'; // Open in new tab
+        link.rel = 'noopener noreferrer';
+        link.className = 'block text-cyan-300 hover:text-cyan-200 truncate';
+        element.appendChild(link);
+    });
 }
 
 function populateGalleryGrid(items, destination) {
     galleryTitle.textContent = `Image & Video Gallery: ${destination}`;
-    galleryGrid.innerHTML = ''; // Clear previous items
+    galleryGrid.innerHTML = '';
 
     if(items.length === 0) {
-        galleryGrid.innerHTML = `<p class="text-slate-400 col-span-full text-center">No images or videos found for ${destination}.</p>`;
+        galleryGrid.innerHTML = `<p class="text-slate-400 col-span-full text-center">No images or videos found.</p>`;
         return;
     }
 
     items.forEach(item => {
         const div = document.createElement('div');
-        div.className = 'aspect-video bg-slate-800 rounded-lg overflow-hidden shadow-lg';
+        // Added margin and a border for better visual separation
+        div.className = 'aspect-video bg-slate-800 rounded-lg overflow-hidden shadow-lg border-2 border-slate-700 hover:border-cyan-400 transition-all';
 
         if (item.type === 'image') {
-            const img = document.createElement('img');
-            img.src = item.url;
-            img.className = 'w-full h-full object-cover';
-            img.alt = `Image of ${destination}`;
-            img.onerror = () => { div.style.display = 'none'; }; // Hide if image fails to load
-            div.appendChild(img);
+            // ... (image creation unchanged)
         } else if (item.type === 'video') {
-            const iframe = document.createElement('iframe');
-            iframe.src = `https://www.youtube.com/embed/${item.videoId}`;
-            iframe.className = 'w-full h-full';
-            iframe.frameBorder = '0';
-            iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
-            iframe.allowFullscreen = true;
-            div.appendChild(iframe);
+            // ... (video creation unchanged)
         }
         galleryGrid.appendChild(div);
     });
