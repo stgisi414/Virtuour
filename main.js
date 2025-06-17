@@ -87,7 +87,7 @@ function positionPauseButton() {
         const tourInfoTop = tourInfoRect.top + window.scrollY;
         
         // Position the pause button 10px above the tour info div
-        pauseContainer.style.bottom = `${window.innerHeight - tourInfoTop + 10}px`;
+        pauseContainer.style.bottom = `${window.innerHeight - tourInfoTop + 50}px`;
         pauseContainer.style.right = '16px'; // Keep right positioning
     }
 }
