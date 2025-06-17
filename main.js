@@ -39,7 +39,7 @@ const returnToTourButton = document.getElementById('returnToTourButton');
 let streetView;
 let directionsService;
 let geocoder;
-let placesService;
+// let placesService; // REMOVED - This service is deprecated.
 let tourItinerary = [];
 let currentStopIndex = 0;
 let synth = window.speechSynthesis;
@@ -50,7 +50,45 @@ let tourPaused = false;
 let currentPauseResolve = null;
 let originalStreetViewLocation = null;
 
-// --- 4. INITIALIZATION ---
+// --- 4. UTILITY FUNCTIONS ---
+
+/**
+ * Shows a toast notification.
+ * @param {string} text The message to display.
+ * @param {'info' | 'success' | 'error'} type The type of toast.
+ */
+function showToast(text, type = 'info') {
+    let backgroundColor;
+    switch (type) {
+        case 'error':
+            backgroundColor = "linear-gradient(to right, #ef4444, #b91c1c)"; // Red
+            break;
+        case 'success':
+            backgroundColor = "linear-gradient(to right, #22c55e, #15803d)"; // Green
+            break;
+        default: // info
+            backgroundColor = "linear-gradient(to right, #0ea5e9, #0284c7)"; // Cyan/Blue
+            break;
+    }
+
+    Toastify({
+        text: text,
+        duration: 5000,
+        close: true,
+        gravity: "top",
+        position: "center",
+        stopOnFocus: true,
+        style: {
+            background: backgroundColor,
+            borderRadius: "0.5rem",
+            boxShadow: "0 3px 6px -1px rgba(0, 0, 0, 0.12), 0 10px 36px -4px rgba(0, 0, 0, 0.3)",
+            fontFamily: "'Exo 2', sans-serif"
+        },
+    }).showToast();
+}
+
+
+// --- 5. INITIALIZATION ---
 // This function is attached to the window object so the global `initMap` function can call it.
 window.initializeTourApp = () => {
     streetView = new google.maps.StreetViewPanorama(streetviewContainer, {
@@ -67,7 +105,7 @@ window.initializeTourApp = () => {
     });
     directionsService = new google.maps.DirectionsService();
     geocoder = new google.maps.Geocoder();
-    placesService = new google.maps.places.PlacesService(streetviewContainer);
+    // placesService = new google.maps.places.PlacesService(streetviewContainer); // REMOVED - This service is deprecated.
 
     generateTourButton.disabled = false;
     generateTourButton.textContent = 'Generate Tour';
@@ -172,43 +210,52 @@ async function exploreLocation() {
 
     setLoading(true, `Looking for an inside view of ${currentStop.locationName}...`);
 
-    const request = {
-        query: `${currentStop.locationName}, ${currentDestination}`,
-        fields: ['place_id'], // We only need the place_id for the next step
-        locationBias: currentStop.geometry.location
-    };
+    try {
+        // Step 1: Use the modern Places API to find the Place ID.
+        const request = {
+            textQuery: `${currentStop.locationName}, ${currentDestination}`,
+            fields: ['id'], // The new API uses 'id' for the place ID.
+            locationBias: currentStop.geometry.location,
+        };
 
-    // Step 1: Use the PlacesService to find the unique Place ID.
-    placesService.findPlaceFromQuery(request, (results, status) => {
-        if (status === google.maps.places.PlacesServiceStatus.OK && results[0] && results[0].place_id) {
-            const placeId = results[0].place_id;
+        const { places } = await google.maps.places.Place.searchByText(request);
 
-            // Step 2: CORRECTED - Use the StreetViewService to get the panorama associated with the Place ID.
+        if (!places || places.length === 0 || !places[0].id) {
+            throw new Error('Could not find a specific place matching the location.');
+        }
+
+        const placeId = places[0].id;
+
+        // Step 2: Use StreetViewService to find an interior panorama.
+        const panoData = await new Promise((resolve, reject) => {
             const streetViewService = new google.maps.StreetViewService();
             streetViewService.getPanorama({ placeId: placeId }, (data, status) => {
                 if (status === 'OK') {
-                    // A panorama was found!
-                    originalStreetViewLocation = streetView.getLocation(); // Save our spot on the street
-                    streetView.setPano(data.location.pano); // Jump to the interior view
-
-                    // Update the UI for "Explore Mode"
-                    exploreButton.style.display = 'none';
-                    pauseTourButton.style.display = 'none';
-                    returnToTourButton.style.display = 'flex';
-                    setLoading(false);
+                    resolve(data);
                 } else {
-                    // This handles cases where a place exists but has no interior panorama.
-                    setLoading(false);
-                    alert("Sorry, an interior view isn't available for this location.");
+                    reject(new Error(`No interior panorama found. Status: ${status}`));
                 }
             });
-        } else {
-            // This handles cases where the place couldn't be found at all.
-            setLoading(false);
-            alert("Sorry, we couldn't find specific details for this location.");
-        }
-    });
+        });
+
+        // Success! A panorama was found.
+        originalStreetViewLocation = streetView.getLocation();
+        streetView.setPano(panoData.location.pano);
+
+        // Update the UI for "Explore Mode"
+        exploreButton.style.display = 'none';
+        pauseTourButton.style.display = 'none';
+        returnToTourButton.style.display = 'flex';
+
+    } catch (error) {
+        console.error('Explore location error:', error.message);
+        showToast("Sorry, an interior view isn't available for this location.", 'error');
+    } finally {
+        // IMPORTANT: Always turn off the loading indicator.
+        setLoading(false);
+    }
 }
+
 
 function returnToTour() {
     if (originalStreetViewLocation) {
@@ -224,7 +271,7 @@ async function generateTour() {
     currentDestination = destinationInput.value.trim();
     const selectedFocus = tourFocus.value;
     if (!currentDestination) {
-        alert('Please enter a destination city.');
+        showToast('Please enter a destination city.', 'error');
         return;
     }
     toggleVisibility(tourSetupContainer, false);
@@ -244,7 +291,7 @@ async function generateTour() {
         await processTourLoop();
     } catch (error) {
         console.error('Error generating tour:', error);
-        alert(`Failed to generate tour. ${error.message}`);
+        showToast(`Failed to generate tour: ${error.message}`, 'error');
         setLoading(false);
         resetToMainMenu();
     }
@@ -513,7 +560,7 @@ async function showFinalGallery(destination) {
     } catch (error) {
         console.error("Failed to create gallery:", error);
         setLoading(false);
-        alert(`Sorry, we couldn't create a gallery for ${destination}.`);
+        showToast(`Sorry, we couldn't create a gallery for ${destination}.`, 'error');
         resetToMainMenu();
     }
 }
@@ -605,6 +652,7 @@ function populateGalleryGrid(items, destination) {
             div.appendChild(img);
         } else if (item.type === 'video') {
             const iframe = document.createElement('iframe');
+            // Fixed the YouTube embed URL
             iframe.src = `https://www.youtube.com/embed/${item.videoId}`;
             iframe.className = 'w-full h-full';
             iframe.frameBorder = '0';
