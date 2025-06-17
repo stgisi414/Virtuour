@@ -75,12 +75,7 @@ generateTourButton.addEventListener('click', generateTour);
 endTourButton.addEventListener('click', resetToMainMenu);
 pauseTourButton.addEventListener('click', togglePause);
 
-// Add resize listener for responsive positioning
-window.addEventListener('resize', () => {
-    if (!tourInfoContainer.classList.contains('invisible')) {
-        updatePauseButtonPosition();
-    }
-});
+// Resize listener no longer needed for pause button positioning
 
 
 // --- 5. HELPER FUNCTIONS ---
@@ -150,28 +145,7 @@ function updateAddressLabel(locationName) {
     currentAddress.textContent = locationName;
 }
 
-function updatePauseButtonPosition() {
-    const tourInfo = document.getElementById('tour-information');
-    const pauseContainer = document.getElementById('pause-button-container');
-    
-    if (!tourInfo || !pauseContainer) return;
-    
-    // Get the computed styles and dimensions of the tour-information div
-    const tourInfoRect = tourInfo.getBoundingClientRect();
-    const tourInfoStyles = window.getComputedStyle(tourInfo);
-    
-    // Calculate the total height including padding
-    const paddingTop = parseInt(tourInfoStyles.paddingTop);
-    const paddingBottom = parseInt(tourInfoStyles.paddingBottom);
-    const totalTourInfoHeight = tourInfoRect.height;
-    
-    // Calculate position: tour info height + some margin (16px)
-    const bottomOffset = totalTourInfoHeight + 16;
-    
-    // Update the pause button container position
-    pauseContainer.style.bottom = `${bottomOffset}px`;
-    pauseContainer.style.right = '16px'; // Keep consistent right margin
-}
+
 
 function resetToMainMenu() {
     if (localTimeInterval) clearInterval(localTimeInterval); // Stop clock
@@ -216,8 +190,7 @@ async function generateTour() {
         toggleVisibility(pauseButtonContainer, true);
         toggleVisibility(addressLabel, true);
         
-        // Set up pause button positioning
-        updatePauseButtonPosition();
+        
 
         currentStopIndex = 0;
         await processTourLoop();
@@ -369,8 +342,7 @@ async function processLocation(location) {
     subtitlesContainer.textContent = `${location.locationName}: ${location.briefDescription}`;
     toggleVisibility(tourInfoContainer, true);
     
-    // Update pause button position after tour info is shown
-    setTimeout(() => updatePauseButtonPosition(), 100);
+    
 
     return new Promise((resolve) => {
         if ('speechSynthesis' in window) {
