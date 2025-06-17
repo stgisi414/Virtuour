@@ -45,17 +45,22 @@ let synth = window.speechSynthesis;
 // --- 4. INITIALIZATION ---
 // This function is called by the Google Maps script tag once it's loaded.
 window.addEventListener('map-ready', () => {
-    streetView = new google.maps.StreetViewPanorama(streetviewContainer, {
-        position: { lat: 40.7291, lng: -73.9965 }, // Default start
-        pov: { heading: 165, pitch: 0 },
-        zoom: 1,
-        visible: false,
-        addressControl: false,
-        linksControl: false,
-        fullscreenControl: false,
-        enableCloseButton: false,
-    });
-    directionsService = new google.maps.DirectionsService();
+    try {
+        streetView = new google.maps.StreetViewPanorama(streetviewContainer, {
+            position: { lat: 40.7291, lng: -73.9965 }, // Default start
+            pov: { heading: 165, pitch: 0 },
+            zoom: 1,
+            visible: false,
+            addressControl: false,
+            linksControl: false,
+            fullscreenControl: false,
+            enableCloseButton: false,
+        });
+        directionsService = new google.maps.DirectionsService();
+        console.log('Google Maps initialized successfully');
+    } catch (error) {
+        console.error('Error initializing Google Maps:', error);
+    }
 });
 
 generateTourButton.addEventListener('click', generateTour);
@@ -97,23 +102,37 @@ async function generateTour() {
 async function fetchItinerary(destination) {
     const prompt = `Create a 5-stop, one-day tourist itinerary for ${destination}. The output must be a valid JSON array of objects, where each object has a "locationName" (e.g., "Eiffel Tower") and a "briefDescription" (a short, engaging sentence). Do not include any text outside the JSON array itself.`;
 
-    const response = await fetch(GEMINI_API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-                temperature: 0.5,
-                response_mime_type: "application/json",
-            }
-        }),
-    });
+    try {
+        const response = await fetch(GEMINI_API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                    temperature: 0.5,
+                    response_mime_type: "application/json",
+                }
+            }),
+        });
 
-    if (!response.ok) throw new Error('Gemini API request failed.');
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Gemini API Error Response:', errorText);
+            throw new Error(`Gemini API request failed with status ${response.status}: ${errorText}`);
+        }
 
-    const data = await response.json();
-    const itineraryText = data.candidates[0].content.parts[0].text;
-    return JSON.parse(itineraryText);
+        const data = await response.json();
+        
+        if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
+            throw new Error('Invalid response format from Gemini API');
+        }
+        
+        const itineraryText = data.candidates[0].content.parts[0].text;
+        return JSON.parse(itineraryText);
+    } catch (error) {
+        console.error('Error in fetchItinerary:', error);
+        throw error;
+    }
 }
 
 /**
@@ -125,6 +144,10 @@ async function startTourFrom(origin) {
         setLoading(true, 'Tour Complete!');
         setTimeout(() => window.location.reload(), 5000); // Reset after 5s
         return;
+    }
+
+    if (!streetView) {
+        throw new Error('Google Maps Street View not initialized. Please check your API key.');
     }
 
     const destination = tourItinerary[currentStopIndex].locationName;
@@ -179,4 +202,36 @@ async function animateStreetView(origin, destination) {
             }
         );
     });
+}
+
+/**
+ * Processes a location by showing information and starting narration.
+ * @param {Object} location - The location object with locationName and briefDescription.
+ */
+async function processLocation(location) {
+    setLoading(false);
+    tourInfoContainer.classList.remove('hidden');
+    
+    // Display location information
+    subtitlesContainer.textContent = `${location.locationName}: ${location.briefDescription}`;
+    
+    // Start text-to-speech narration
+    if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(
+            `Welcome to ${location.locationName}. ${location.briefDescription}`
+        );
+        utterance.rate = 0.8;
+        utterance.pitch = 1;
+        synth.speak(utterance);
+        
+        // Wait for speech to complete before continuing
+        return new Promise((resolve) => {
+            utterance.onend = () => {
+                setTimeout(resolve, 2000); // Wait 2 seconds after speech ends
+            };
+        });
+    } else {
+        // If speech synthesis not available, just wait a bit
+        return new Promise((resolve) => setTimeout(resolve, 4000));
+    }
 }
