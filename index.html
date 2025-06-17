@@ -109,17 +109,18 @@
 
     </main>
 
+    <script src="main.js"></script>
+
     <script>
         function initMap() {
+            // This will now work because main.js is already loaded and parsed.
             window.initializeTourApp();
         }
     </script>
 
     <script async
         src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCYxnWpHNlzAz5h2W3pGTaW_oIP1ukTs1Y&callback=initMap&libraries=places">
-        </script>
-
-    <script src="main.js"></script>
+    </script>
 
 </body>
 

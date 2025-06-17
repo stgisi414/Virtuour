@@ -1,18 +1,17 @@
 // --- 1. API KEY AND ENDPOINT CONFIGURATION ---
 const GEMINI_API_KEY = 'AIzaSyDtLyUB-2wocE-uNG5e3pwNFArjn1GVTco'; // Your Gemini API Key
 const GOOGLE_API_KEY = 'AIzaSyCYxnWpHNlzAz5h2W3pGTaW_oIP1ukTs1Y'; // Your Google Cloud API Key
-
-const YOUTUBE_API_KEY = GOOGLE_API_KEY; 
-const CUSTOM_SEARCH_ENGINE_ID = '16b67ee3373714c2b'; 
-
+const YOUTUBE_API_KEY = GOOGLE_API_KEY;
+const CUSTOM_SEARCH_ENGINE_ID = '16b67ee3373714c2b';
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 const YOUTUBE_API_URL = 'https://www.googleapis.com/youtube/v3/search';
 const CUSTOM_SEARCH_API_URL = 'https://www.googleapis.com/customsearch/v1';
 
-
 // --- 2. DOM ELEMENT REFERENCES ---
+// This code runs after the HTML document's elements have been created,
+// because the script tag is at the end of the <body>.
 const destinationInput = document.getElementById('destinationInput');
-const tourFocus = document.getElementById('tourFocus'); 
+const tourFocus = document.getElementById('tourFocus');
 const generateTourButton = document.getElementById('generateTourButton');
 const tourSetupContainer = document.getElementById('tour-setup');
 const streetviewContainer = document.getElementById('streetview-container');
@@ -20,7 +19,6 @@ const tourInfoContainer = document.getElementById('tour-information');
 const subtitlesContainer = document.getElementById('subtitles-container');
 const loadingIndicator = document.getElementById('loading-indicator');
 const loadingText = document.getElementById('loading-text');
-
 const galleryContainer = document.getElementById('gallery-container');
 const galleryTitle = document.getElementById('gallery-title');
 const galleryGrid = document.getElementById('gallery-grid');
@@ -28,8 +26,6 @@ const endTourButton = document.getElementById('endTourButton');
 const localTime = document.getElementById('local-time');
 const localWeather = document.getElementById('local-weather');
 const localNews = document.getElementById('local-news');
-
-// Updated controls
 const addressLabel = document.getElementById('address-label');
 const currentAddress = document.getElementById('current-address');
 const controlsContainer = document.getElementById('controls-container');
@@ -39,23 +35,23 @@ const pauseText = document.getElementById('pause-text');
 const exploreButton = document.getElementById('exploreButton');
 const returnToTourButton = document.getElementById('returnToTourButton');
 
-
 // --- 3. GLOBAL VARIABLES ---
 let streetView;
 let directionsService;
 let geocoder;
-let placesService; // For Places API
+let placesService;
 let tourItinerary = [];
 let currentStopIndex = 0;
 let synth = window.speechSynthesis;
 let currentDestination = '';
-let localTimeInterval = null; 
-let destinationTimezone = null; 
-let tourPaused = false; 
-let currentPauseResolve = null; 
-let originalStreetViewLocation = null; // To save state before exploring
+let localTimeInterval = null;
+let destinationTimezone = null;
+let tourPaused = false;
+let currentPauseResolve = null;
+let originalStreetViewLocation = null;
 
 // --- 4. INITIALIZATION ---
+// This function is attached to the window object so the global `initMap` function can call it.
 window.initializeTourApp = () => {
     streetView = new google.maps.StreetViewPanorama(streetviewContainer, {
         position: { lat: 40.7291, lng: -73.9965 },
@@ -71,32 +67,32 @@ window.initializeTourApp = () => {
     });
     directionsService = new google.maps.DirectionsService();
     geocoder = new google.maps.Geocoder();
-    placesService = new google.maps.places.PlacesService(streetViewContainer);
+    placesService = new google.maps.places.PlacesService(streetviewContainer);
 
     generateTourButton.disabled = false;
     generateTourButton.textContent = 'Generate Tour';
 };
 
+// --- EVENT LISTENERS ---
 generateTourButton.addEventListener('click', generateTour);
 endTourButton.addEventListener('click', resetToMainMenu);
 pauseTourButton.addEventListener('click', togglePause);
 exploreButton.addEventListener('click', exploreLocation);
 returnToTourButton.addEventListener('click', returnToTour);
-
 window.addEventListener('resize', positionControls);
+
+// --- All other functions are defined below ---
 
 function positionControls() {
     const tourInfo = document.getElementById('tour-information');
     if (tourInfo && controlsContainer) {
         const tourInfoRect = tourInfo.getBoundingClientRect();
         const tourInfoTop = tourInfoRect.top + window.scrollY;
-
         controlsContainer.style.bottom = `${window.innerHeight - tourInfoTop + 10}px`;
-        controlsContainer.style.right = '16px'; 
+        controlsContainer.style.right = '16px';
     }
 }
 
-// --- 5. HELPER & UI FUNCTIONS ---
 function toggleVisibility(element, show) {
     if (show) {
         element.classList.remove('invisible', 'opacity-0');
@@ -137,9 +133,9 @@ function updateAddressLabel(locationName) {
 function resetToMainMenu() {
     if (localTimeInterval) clearInterval(localTimeInterval);
     destinationTimezone = null;
-    tourPaused = false; 
+    tourPaused = false;
     toggleVisibility(galleryContainer, false);
-    toggleVisibility(streetviewContainer, false); 
+    toggleVisibility(streetviewContainer, false);
     toggleVisibility(addressLabel, false);
     toggleVisibility(controlsContainer, false);
     streetView.setVisible(false);
@@ -148,11 +144,9 @@ function resetToMainMenu() {
     generateTourButton.disabled = false;
     generateTourButton.textContent = 'Generate Another Tour';
     toggleVisibility(tourSetupContainer, true);
-    galleryGrid.innerHTML = ''; 
+    galleryGrid.innerHTML = '';
     originalStreetViewLocation = null;
 }
-
-// --- 6. TOUR STATE MANAGEMENT (Pause, Explore, Return) ---
 
 function togglePause() {
     tourPaused = !tourPaused;
@@ -164,7 +158,6 @@ function togglePause() {
         pauseIcon.textContent = '⏸️';
         pauseText.textContent = 'Pause Tour';
         pauseTourButton.className = 'bg-red-500 hover:bg-red-400 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-red-400 transition-colors duration-300 flex items-center gap-2';
-
         exploreButton.style.display = 'none';
         if (currentPauseResolve) {
             currentPauseResolve();
@@ -176,15 +169,12 @@ function togglePause() {
 async function exploreLocation() {
     const currentStop = tourItinerary[currentStopIndex];
     if (!currentStop) return;
-
     setLoading(true, `Looking for an inside view of ${currentStop.locationName}...`);
-
     const request = {
         query: `${currentStop.locationName}, ${currentDestination}`,
         fields: ['name', 'place_id'],
         locationBias: currentStop.geometry.location
     };
-
     placesService.findPlaceFromQuery(request, (results, status) => {
         if (status === google.maps.places.PlacesServiceStatus.OK && results[0] && results[0].place_id) {
             const placeId = results[0].place_id;
@@ -192,7 +182,6 @@ async function exploreLocation() {
                 if (status === google.maps.places.PlacesServiceStatus.OK && place && place.pano) {
                     originalStreetViewLocation = streetView.getLocation();
                     streetView.setPano(place.pano);
-
                     exploreButton.style.display = 'none';
                     pauseTourButton.style.display = 'none';
                     returnToTourButton.style.display = 'flex';
@@ -219,9 +208,6 @@ function returnToTour() {
     pauseTourButton.style.display = 'flex';
 }
 
-
-// --- 7. CORE TOUR LOGIC ---
-
 async function generateTour() {
     currentDestination = destinationInput.value.trim();
     const selectedFocus = tourFocus.value;
@@ -229,25 +215,19 @@ async function generateTour() {
         alert('Please enter a destination city.');
         return;
     }
-
     toggleVisibility(tourSetupContainer, false);
-
     try {
         tourItinerary = await fetchItinerary(currentDestination, selectedFocus);
         if (!tourItinerary || tourItinerary.length === 0) {
             throw new Error("The generated itinerary is empty.");
         }
-
         toggleVisibility(streetviewContainer, true);
         streetView.setVisible(true);
-
         toggleVisibility(controlsContainer, true);
         positionControls();
         toggleVisibility(addressLabel, true);
-
         exploreButton.style.display = 'none';
         returnToTourButton.style.display = 'none';
-
         currentStopIndex = 0;
         await processTourLoop();
     } catch (error) {
@@ -262,7 +242,6 @@ async function processTourLoop() {
     while (currentStopIndex < tourItinerary.length) {
         const currentStop = tourItinerary[currentStopIndex];
         updateAddressLabel(currentStop.locationName);
-
         if (currentStopIndex === 0) {
             setLoading(true, `Going to the first stop: ${currentStop.locationName}`);
             await setStreetViewPosition(currentStop);
@@ -273,11 +252,9 @@ async function processTourLoop() {
             const origin = tourItinerary[currentStopIndex - 1];
             await animateStreetView(origin, currentStop);
         }
-
         await processLocation(currentStop);
         currentStopIndex++;
     }
-
     setLoading(true, 'Tour Complete! Curating gallery...');
     await showFinalGallery(currentDestination);
 }
@@ -287,22 +264,19 @@ async function processLocation(location) {
     synth.cancel();
     subtitlesContainer.textContent = `${location.locationName}: ${location.briefDescription}`;
     toggleVisibility(tourInfoContainer, true);
-    positionControls(); 
-
+    positionControls();
     if (!tourPaused) {
         togglePause();
     }
     exploreButton.style.display = 'flex';
     returnToTourButton.style.display = 'none';
     pauseTourButton.style.display = 'flex';
-
     return new Promise((resolve) => {
         if ('speechSynthesis' in window) {
             const utterance = new SpeechSynthesisUtterance(`We have arrived at ${location.locationName}. ${location.briefDescription}. You can now explore the area or resume the tour.`);
             utterance.rate = 0.9;
             utterance.pitch = 1.1;
             synth.speak(utterance);
-
             utterance.onend = () => {
                 toggleVisibility(tourInfoContainer, false);
             };
@@ -311,10 +285,9 @@ async function processLocation(location) {
                 toggleVisibility(tourInfoContainer, false);
             }, 5000);
         }
-        resolve(); 
+        resolve();
     });
 }
-
 
 async function setStreetViewPosition(stop) {
     const locationName = stop.locationName;
@@ -327,26 +300,24 @@ async function setStreetViewPosition(stop) {
                         geoResolve(results[0].geometry.location);
                     } else {
                         console.warn(`Geocoding failed for "${locationName}": ${status}. Falling back to Gemini's coordinates.`);
-                        geoResolve(stop.geometry.location); 
+                        geoResolve(new google.maps.LatLng(stop.geometry.location.lat, stop.geometry.location.lng));
                     }
                 });
             });
             targetLatLng = geocodeResults;
         } catch (error) {
             console.error("Error during initial geocoding:", error);
-            targetLatLng = stop.geometry.location; 
+            targetLatLng = new google.maps.LatLng(stop.geometry.location.lat, stop.geometry.location.lng);
         }
-
-        if (!targetLatLng || typeof targetLatLng.lat !== 'function' || typeof targetLatLng.lng !== 'function') {
+        if (!targetLatLng) {
             console.error(`Invalid targetLatLng for ${locationName}.`);
             resolve();
             return;
         }
-
         const streetViewService = new google.maps.StreetViewService();
         streetViewService.getPanorama({
-            location: targetLatLng, 
-            radius: 500, 
+            location: targetLatLng,
+            radius: 500,
             source: google.maps.StreetViewSource.OUTDOOR
         }, (data, status) => {
             if (status === 'OK') {
@@ -363,12 +334,10 @@ async function animateStreetView(originStop, destinationStop) {
     const originName = originStop.locationName;
     const destinationName = destinationStop.locationName;
     setLoading(true, `Traveling from ${originName} to ${destinationName}...`);
-
     const originLocation = new google.maps.LatLng(originStop.geometry.location.lat, originStop.geometry.location.lng);
     const destinationLocation = new google.maps.LatLng(destinationStop.geometry.location.lat, destinationStop.geometry.location.lng);
     const distance = getDistanceInKm(originStop.geometry.location, destinationStop.geometry.location);
     const travelMode = await getTravelMode(originName, destinationName, distance);
-
     return new Promise((resolve) => {
         directionsService.route({
             origin: originLocation,
@@ -404,7 +373,6 @@ async function animateStreetView(originStop, destinationStop) {
     });
 }
 
-// --- 8. ITINERARY AND GALLERY FETCHING ---
 async function fetchItinerary(destination, focus) {
     setLoading(true, `Generating ${focus} tour for ${destination}...`);
     const prompt = `
@@ -415,9 +383,7 @@ async function fetchItinerary(destination, focus) {
         2. "briefDescription": A concise, one-sentence interesting fact or description suitable for a tour guide to say upon arrival.
         3. "geometry": An object containing a "location" object with "lat" and "lng" coordinates.
         IMPORTANT: Respond with ONLY the valid JSON array of objects. Do not include any other text, markdown, or explanation.
-        The final output must be a parsable JSON array.
     `;
-
     try {
         const response = await fetch(GEMINI_API_URL, {
             method: 'POST',
@@ -430,17 +396,15 @@ async function fetchItinerary(destination, focus) {
                 }
             }),
         });
-
         if (!response.ok) throw new Error(`The AI tour guide is currently unavailable (API Error: ${response.status})`);
         const data = await response.json();
         const itinerary = JSON.parse(data.candidates[0].content.parts[0].text);
-
         if (!Array.isArray(itinerary) || itinerary.length === 0) {
             throw new Error("The AI guide couldn't create an itinerary for this location.");
         }
         itinerary.forEach((stop, index) => {
             if (!stop.locationName || !stop.briefDescription || !stop.geometry || !stop.geometry.location || !stop.geometry.location.lat || !stop.geometry.location.lng) {
-                 throw new Error(`The AI guide returned an invalid itinerary (stop ${index} is malformed).`);
+                throw new Error(`The AI guide returned an invalid itinerary (stop ${index} is malformed).`);
             }
         });
         return itinerary;
@@ -458,7 +422,10 @@ async function fetchLocalInfo(query) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: { temperature: 0, response_mime_type: "application/json" }
+                generationConfig: {
+                    temperature: 0,
+                    response_mime_type: "application/json"
+                }
             }),
         });
         if (!response.ok) throw new Error('Local info API request failed');
@@ -476,14 +443,13 @@ async function fetchLocalInfo(query) {
             else if (condition.includes('fog') || condition.includes('mist')) weatherEmoji = '🌫️';
             weatherText = `${info.weather.temp_f}°F / ${info.weather.temp_c}°C, ${info.weather.condition}`;
         }
-
         return {
             weather: { text: weatherText, emoji: weatherEmoji },
             timezone: info.timezone || null
         };
     } catch (error) {
         console.error("Could not fetch local info:", error);
-        return { weather: { text: 'Unavailable', emoji: '❔' }, timezone: null }; 
+        return { weather: { text: 'Unavailable', emoji: '❔' }, timezone: null };
     }
 }
 
@@ -514,7 +480,6 @@ async function showFinalGallery(destination) {
     toggleVisibility(controlsContainer, false);
     toggleVisibility(addressLabel, false);
     setLoading(true, 'Curating gallery and local information...');
-
     try {
         const [images, videos, localInfo, news] = await Promise.all([
             fetchImages(destination),
@@ -571,13 +536,16 @@ async function fetchVideos(query) {
 
 async function fetchNewsOutlets(query) {
     const prompt = `List the top 3-4 local news outlets for ${query}. Provide only a valid JSON array of objects, where each object has "name" and "url".`;
-     try {
+    try {
         const response = await fetch(GEMINI_API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: { temperature: 0.2, response_mime_type: "application/json" }
+                generationConfig: {
+                    temperature: 0.2,
+                    response_mime_type: "application/json"
+                }
             }),
         });
         if (!response.ok) throw new Error('News API request failed');
@@ -609,12 +577,10 @@ function populateNews(newsItems, element) {
 function populateGalleryGrid(items, destination) {
     galleryTitle.textContent = `Image & Video Gallery: ${destination}`;
     galleryGrid.innerHTML = '';
-
     if (!items || items.length === 0) {
         galleryGrid.innerHTML = `<p class="text-slate-400 col-span-full text-center">No images or videos found.</p>`;
         return;
     }
-
     items.forEach(item => {
         const div = document.createElement('div');
         div.className = 'block aspect-video bg-slate-800 rounded-lg overflow-hidden shadow-lg border-2 border-slate-700 hover:border-cyan-400 transition-all';
@@ -623,11 +589,10 @@ function populateGalleryGrid(items, destination) {
             img.src = item.url;
             img.className = 'w-full h-full object-cover';
             img.alt = `Image of ${destination}`;
-            img.onerror = () => { div.style.display = 'none'; }; 
+            img.onerror = () => { div.style.display = 'none'; };
             div.appendChild(img);
         } else if (item.type === 'video') {
             const iframe = document.createElement('iframe');
-            // CORRECTED YouTube embed URL
             iframe.src = `https://www.youtube.com/embed/${item.videoId}`;
             iframe.className = 'w-full h-full';
             iframe.frameBorder = '0';
