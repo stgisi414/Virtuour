@@ -8,8 +8,6 @@ const YOUTUBE_API_URL = 'https://www.googleapis.com/youtube/v3/search';
 const CUSTOM_SEARCH_API_URL = 'https://www.googleapis.com/customsearch/v1';
 
 // --- 2. DOM ELEMENT REFERENCES ---
-// This code runs after the HTML document's elements have been created,
-// because the script tag is at the end of the <body>.
 const destinationInput = document.getElementById('destinationInput');
 const tourFocus = document.getElementById('tourFocus');
 const generateTourButton = document.getElementById('generateTourButton');
@@ -39,7 +37,7 @@ const returnToTourButton = document.getElementById('returnToTourButton');
 let streetView;
 let directionsService;
 let geocoder;
-// let placesService; // REMOVED - This service is deprecated.
+let streetViewService;
 let tourItinerary = [];
 let currentStopIndex = 0;
 let synth = window.speechSynthesis;
@@ -51,26 +49,19 @@ let currentPauseResolve = null;
 let originalStreetViewLocation = null;
 
 // --- 4. UTILITY FUNCTIONS ---
-
-/**
- * Shows a toast notification.
- * @param {string} text The message to display.
- * @param {'info' | 'success' | 'error'} type The type of toast.
- */
 function showToast(text, type = 'info') {
     let backgroundColor;
     switch (type) {
         case 'error':
-            backgroundColor = "linear-gradient(to right, #ef4444, #b91c1c)"; // Red
+            backgroundColor = "linear-gradient(to right, #ef4444, #b91c1c)";
             break;
         case 'success':
-            backgroundColor = "linear-gradient(to right, #22c55e, #15803d)"; // Green
+            backgroundColor = "linear-gradient(to right, #22c55e, #15803d)";
             break;
-        default: // info
-            backgroundColor = "linear-gradient(to right, #0ea5e9, #0284c7)"; // Cyan/Blue
+        default:
+            backgroundColor = "linear-gradient(to right, #0ea5e9, #0284c7)";
             break;
     }
-
     Toastify({
         text: text,
         duration: 5000,
@@ -87,9 +78,13 @@ function showToast(text, type = 'info') {
     }).showToast();
 }
 
+function updateExploreUI() {
+    exploreButton.style.display = 'none';
+    pauseTourButton.style.display = 'none';
+    returnToTourButton.style.display = 'flex';
+}
 
 // --- 5. INITIALIZATION ---
-// This function is attached to the window object so the global `initMap` function can call it.
 window.initializeTourApp = () => {
     streetView = new google.maps.StreetViewPanorama(streetviewContainer, {
         position: { lat: 40.7291, lng: -73.9965 },
@@ -105,8 +100,7 @@ window.initializeTourApp = () => {
     });
     directionsService = new google.maps.DirectionsService();
     geocoder = new google.maps.Geocoder();
-    // placesService = new google.maps.places.PlacesService(streetviewContainer); // REMOVED - This service is deprecated.
-
+    streetViewService = new google.maps.StreetViewService();
     generateTourButton.disabled = false;
     generateTourButton.textContent = 'Generate Tour';
 };
@@ -119,8 +113,7 @@ exploreButton.addEventListener('click', exploreLocation);
 returnToTourButton.addEventListener('click', returnToTour);
 window.addEventListener('resize', positionControls);
 
-// --- All other functions are defined below ---
-
+// --- APP LOGIC ---
 function positionControls() {
     const tourInfo = document.getElementById('tour-information');
     if (tourInfo && controlsContainer) {
@@ -145,7 +138,7 @@ function setLoading(isLoading, message = '') {
 }
 
 function getDistanceInKm(latLng1, latLng2) {
-    const R = 6371; // Radius of the Earth in km
+    const R = 6371;
     const dLat = (latLng2.lat - latLng1.lat) * Math.PI / 180;
     const dLon = (latLng2.lng - latLng1.lng) * Math.PI / 180;
     const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(latLng1.lat * Math.PI / 180) * Math.cos(latLng2.lat * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
@@ -204,58 +197,74 @@ function togglePause() {
     }
 }
 
+// Your fixed version of exploreLocation
 async function exploreLocation() {
     const currentStop = tourItinerary[currentStopIndex];
     if (!currentStop) return;
 
     setLoading(true, `Looking for an inside view of ${currentStop.locationName}...`);
 
+    // Use the specific 'explore' coordinates if available, otherwise fall back to the main 'geometry' coordinates.
+    const exploreLocationCoords = currentStop.explore?.location || currentStop.geometry.location;
+
     try {
-        // Step 1: Use the modern Places API to find the Place ID.
-        const request = {
-            textQuery: `${currentStop.locationName}, ${currentDestination}`,
-            fields: ['id'], // The new API uses 'id' for the place ID.
-            locationBias: currentStop.geometry.location,
-        };
-
-        const { places } = await google.maps.places.Place.searchByText(request);
-
-        if (!places || places.length === 0 || !places[0].id) {
-            throw new Error('Could not find a specific place matching the location.');
+        // --- Attempt 1: Find an INDOOR panorama (best case) ---
+        try {
+            const location = new google.maps.LatLng(exploreLocationCoords.lat, exploreLocationCoords.lng);
+            const panoData = await new Promise((resolve, reject) => {
+                const timeoutId = setTimeout(() => reject(new Error("Indoor search timed out")), 7000);
+                streetViewService.getPanorama({
+                    location: location,
+                    radius: 50,
+                    source: google.maps.StreetViewSource.INDOOR
+                }, (data, status) => {
+                    clearTimeout(timeoutId);
+                    if (status === 'OK') resolve(data);
+                    else reject(new Error(`No indoor panorama found. Status: ${status}`));
+                });
+            });
+            originalStreetViewLocation = streetView.getLocation();
+            streetView.setPano(panoData.location.pano);
+            updateExploreUI();
+            return; // Success!
+        } catch (error) {
+            console.warn("Attempt 1 (Indoor) Failed:", error.message);
         }
 
-        const placeId = places[0].id;
+        // --- Attempt 2: Find ANY panorama using the Place ID (fallback) ---
+        try {
+            const request = {
+                textQuery: `${currentStop.locationName}, ${currentDestination}`,
+                fields: ['id'],
+                locationBias: exploreLocationCoords,
+            };
+            const { places } = await google.maps.places.Place.searchByText(request);
+            if (!places || places.length === 0 || !places[0].id) throw new Error("Could not find Place ID.");
 
-        // Step 2: Use StreetViewService to find an interior panorama.
-        const panoData = await new Promise((resolve, reject) => {
-            const streetViewService = new google.maps.StreetViewService();
-            streetViewService.getPanorama({ placeId: placeId }, (data, status) => {
-                if (status === 'OK') {
-                    resolve(data);
-                } else {
-                    reject(new Error(`No interior panorama found. Status: ${status}`));
-                }
+            const placeId = places[0].id;
+            const panoData = await new Promise((resolve, reject) => {
+                 const timeoutId = setTimeout(() => reject(new Error("Place ID search timed out")), 7000);
+                 streetViewService.getPanorama({ placeId }, (data, status) => {
+                    clearTimeout(timeoutId);
+                    if (status === 'OK') resolve(data);
+                    else reject(new Error(`No panorama for Place ID. Status: ${status}`));
+                });
             });
-        });
+            originalStreetViewLocation = streetView.getLocation();
+            streetView.setPano(panoData.location.pano);
+            updateExploreUI();
+            return; // Success!
+        } catch (error) {
+            console.warn("Attempt 2 (Place ID) Failed:", error.message);
+        }
 
-        // Success! A panorama was found.
-        originalStreetViewLocation = streetView.getLocation();
-        streetView.setPano(panoData.location.pano);
+        // --- If all attempts fail ---
+        showToast("Sorry, a specific interior view isn't available for this location.", 'error');
 
-        // Update the UI for "Explore Mode"
-        exploreButton.style.display = 'none';
-        pauseTourButton.style.display = 'none';
-        returnToTourButton.style.display = 'flex';
-
-    } catch (error) {
-        console.error('Explore location error:', error.message);
-        showToast("Sorry, an interior view isn't available for this location.", 'error');
     } finally {
-        // IMPORTANT: Always turn off the loading indicator.
         setLoading(false);
     }
 }
-
 
 function returnToTour() {
     if (originalStreetViewLocation) {
@@ -267,6 +276,7 @@ function returnToTour() {
     pauseTourButton.style.display = 'flex';
 }
 
+// Corrected generateTour logic
 async function generateTour() {
     currentDestination = destinationInput.value.trim();
     const selectedFocus = tourFocus.value;
@@ -287,8 +297,32 @@ async function generateTour() {
         toggleVisibility(addressLabel, true);
         exploreButton.style.display = 'none';
         returnToTourButton.style.display = 'none';
+
+        // --- NEW: Find the best starting point using Place Search for the first stop ---
+        setLoading(true, `Finding the best starting point for ${tourItinerary[0].locationName}...`);
+        try {
+            const firstStopName = tourItinerary[0].locationName;
+            const request = {
+                textQuery: `${firstStopName}, ${currentDestination}`,
+                fields: ['id'],
+            };
+            const { places } = await google.maps.places.Place.searchByText(request);
+            if (!places || places.length === 0 || !places[0].id) {
+                throw new Error("Could not find a specific Place ID for the first stop.");
+            }
+            // Use the new helper to set the view to the precise Place ID panorama
+            await setStreetViewToPlaceId(places[0].id);
+
+        } catch (error) {
+            console.warn(`Could not find iconic starting point: ${error.message}. Defaulting to itinerary coordinates.`);
+            // Fallback to the old method if the new one fails
+            await setStreetViewPosition(tourItinerary[0]);
+        }
+
+        // --- The rest of the tour starts here ---
         currentStopIndex = 0;
         await processTourLoop();
+
     } catch (error) {
         console.error('Error generating tour:', error);
         showToast(`Failed to generate tour: ${error.message}`, 'error');
@@ -297,23 +331,33 @@ async function generateTour() {
     }
 }
 
+// Corrected tour loop logic
 async function processTourLoop() {
     while (currentStopIndex < tourItinerary.length) {
         const currentStop = tourItinerary[currentStopIndex];
+        const isLastStop = currentStopIndex === tourItinerary.length - 1;
+
         updateAddressLabel(currentStop.locationName);
-        if (currentStopIndex === 0) {
-            setLoading(true, `Going to the first stop: ${currentStop.locationName}`);
-            await setStreetViewPosition(currentStop);
-        } else {
-            if (tourPaused) {
-                await new Promise(resolve => { currentPauseResolve = resolve; });
-            }
-            const origin = tourItinerary[currentStopIndex - 1];
-            await animateStreetView(origin, currentStop);
-        }
         await processLocation(currentStop);
+
+        if (isLastStop) {
+            pauseIcon.textContent = '🏁';
+            pauseText.textContent = 'End Tour';
+            pauseTourButton.className = 'bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-2 px-4 rounded-lg shadow-lg border border-cyan-400 transition-colors duration-300 flex items-center gap-2';
+        }
+
+        await new Promise(resolve => { currentPauseResolve = resolve; });
+
+        if (isLastStop) {
+            break;
+        }
+
+        const origin = tourItinerary[currentStopIndex];
         currentStopIndex++;
+        const destination = tourItinerary[currentStopIndex];
+        await animateStreetView(origin, destination);
     }
+
     setLoading(true, 'Tour Complete! Curating gallery...');
     await showFinalGallery(currentDestination);
 }
@@ -349,42 +393,39 @@ async function processLocation(location) {
 }
 
 async function setStreetViewPosition(stop) {
-    const locationName = stop.locationName;
-    return new Promise(async (resolve) => {
-        let targetLatLng;
-        try {
-            const geocodeResults = await new Promise((geoResolve) => {
-                geocoder.geocode({ address: `${locationName}, ${currentDestination}` }, (results, status) => {
-                    if (status === 'OK' && results[0]) {
-                        geoResolve(results[0].geometry.location);
-                    } else {
-                        console.warn(`Geocoding failed for "${locationName}": ${status}. Falling back to Gemini's coordinates.`);
-                        geoResolve(new google.maps.LatLng(stop.geometry.location.lat, stop.geometry.location.lng));
-                    }
-                });
-            });
-            targetLatLng = geocodeResults;
-        } catch (error) {
-            console.error("Error during initial geocoding:", error);
-            targetLatLng = new google.maps.LatLng(stop.geometry.location.lat, stop.geometry.location.lng);
-        }
-        if (!targetLatLng) {
-            console.error(`Invalid targetLatLng for ${locationName}.`);
+    // This function will now always resolve to prevent the tour from hanging.
+    return new Promise((resolve) => {
+        const targetLatLng = new google.maps.LatLng(stop.geometry.location.lat, stop.geometry.location.lng);
+
+        if (!targetLatLng.lat() || !targetLatLng.lng()) {
+            console.error(`Invalid LatLng provided for ${stop.locationName}.`);
             resolve();
             return;
         }
-        const streetViewService = new google.maps.StreetViewService();
+
+        // Set a 7-second timeout for the panorama search.
+        const timeoutId = setTimeout(() => {
+            console.warn(`Panorama search timed out for ${stop.locationName}. Placing camera at exact coordinates.`);
+            streetView.setPosition(targetLatLng); // Place camera at the coordinates on timeout
+            resolve(); // Resolve the promise to allow the app to continue
+        }, 7000);
+
         streetViewService.getPanorama({
             location: targetLatLng,
-            radius: 500,
+            radius: 50,
             source: google.maps.StreetViewSource.OUTDOOR
         }, (data, status) => {
+            clearTimeout(timeoutId); // Clear the timeout once a response is received
+
             if (status === 'OK') {
+                // Panorama found, move the camera there.
                 streetView.setPosition(data.location.latLng);
             } else {
+                // If no panorama is found, place the camera at the exact coordinates.
+                console.warn(`Could not find Street View panorama for ${stop.locationName}. Placing camera at exact coordinates.`);
                 streetView.setPosition(targetLatLng);
             }
-            resolve();
+            resolve(); // Signal that positioning is complete.
         });
     });
 }
@@ -405,6 +446,8 @@ async function animateStreetView(originStop, destinationStop) {
         }, (response, status) => {
             if (status !== 'OK') {
                 console.error(`Directions request failed: ${status}. Using fallback positioning.`);
+                // Inform the user about the teleport
+                showToast(`Could not calculate a route. Teleporting to ${destinationName}!`, 'info');
                 setStreetViewPosition(destinationStop).then(resolve);
                 return;
             }
@@ -440,7 +483,8 @@ async function fetchItinerary(destination, focus) {
         For each stop, provide the following information in a valid JSON format:
         1. "locationName": The name of the landmark or place.
         2. "briefDescription": A concise, one-sentence interesting fact or description suitable for a tour guide to say upon arrival.
-        3. "geometry": An object containing a "location" object with "lat" and "lng" coordinates.
+        3. "geometry": An object containing a "location" object with the best publicly accessible lat/lng coordinates for ARRIVING at the location (e.g., the main entrance, trailhead, or parking lot). This is for the travel part of the tour.
+        4. "explore": (Optional) An object with a "location" containing the lat/lng coordinates for the MOST ICONIC VIEWPOINT or interior panorama associated with the stop (e.g., a summit view, an exhibition hall). Only include this if a distinct, well-known viewpoint exists.
         IMPORTANT: Respond with ONLY the valid JSON array of objects. Do not include any other text, markdown, or explanation.
     `;
     try {
@@ -652,7 +696,6 @@ function populateGalleryGrid(items, destination) {
             div.appendChild(img);
         } else if (item.type === 'video') {
             const iframe = document.createElement('iframe');
-            // Fixed the YouTube embed URL
             iframe.src = `https://www.youtube.com/embed/${item.videoId}`;
             iframe.className = 'w-full h-full';
             iframe.frameBorder = '0';
