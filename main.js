@@ -236,6 +236,9 @@ async function generateTour() {
         // Initialize tour UI
         await initializeTourUI();
         
+        // Clear loading and start the tour
+        setLoading(false);
+        
         // Start the tour
         await startTour();
         
@@ -321,11 +324,15 @@ async function startTour() {
         throw new Error('No valid stops in itinerary');
     }
     
+    console.log('Starting tour with', tourItinerary.length, 'stops');
     currentStopIndex = 0;
+    
+    // Move to first stop
     await moveToStop(tourItinerary[0]);
     
     // Start the tour loop
     tourState = 'touring';
+    console.log('Tour started, beginning tour loop');
     await runTourLoop();
 }
 
