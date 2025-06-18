@@ -44,13 +44,110 @@ let synth = window.speechSynthesis;
 let currentDestination = '';
 let localTimeInterval = null;
 let destinationTimezone = null;
-let tourState = 'setup'; // 'setup', 'touring', 'paused', 'exploring', 'gallery'
 let currentUtterance = null;
 let exploreLocation = null;
-let tourInProgress = false;
-let autoAdvanceTimeout = null;
 
-// --- 4. CORE UTILITY FUNCTIONS ---
+// --- 4. TOUR STATE MACHINE ---
+class TourStateMachine {
+    constructor() {
+        this.state = 'setup';
+        this.isRunning = false;
+        this.isPaused = false;
+        this.isExploring = false;
+        this.currentTimeout = null;
+        this.listeners = new Map();
+    }
+
+    setState(newState) {
+        const oldState = this.state;
+        this.state = newState;
+        console.log(`State changed: ${oldState} -> ${newState}`);
+        this.emit('stateChange', { from: oldState, to: newState });
+    }
+
+    on(event, callback) {
+        if (!this.listeners.has(event)) {
+            this.listeners.set(event, []);
+        }
+        this.listeners.get(event).push(callback);
+    }
+
+    emit(event, data) {
+        if (this.listeners.has(event)) {
+            this.listeners.get(event).forEach(callback => {
+                try {
+                    callback(data);
+                } catch (error) {
+                    console.error(`Error in event listener for ${event}:`, error);
+                }
+            });
+        }
+    }
+
+    start() {
+        this.isRunning = true;
+        this.isPaused = false;
+        this.setState('touring');
+    }
+
+    pause() {
+        this.isPaused = true;
+        this.setState('paused');
+        this.clearTimeouts();
+    }
+
+    resume() {
+        this.isPaused = false;
+        this.setState('touring');
+    }
+
+    stop() {
+        this.isRunning = false;
+        this.isPaused = false;
+        this.setState('stopped');
+        this.clearTimeouts();
+    }
+
+    explore() {
+        this.isExploring = true;
+        this.setState('exploring');
+    }
+
+    endExploring() {
+        this.isExploring = false;
+        this.setState(this.isPaused ? 'paused' : 'touring');
+    }
+
+    complete() {
+        this.isRunning = false;
+        this.setState('gallery');
+        this.clearTimeouts();
+    }
+
+    reset() {
+        this.stop();
+        this.setState('setup');
+    }
+
+    clearTimeouts() {
+        if (this.currentTimeout) {
+            clearTimeout(this.currentTimeout);
+            this.currentTimeout = null;
+        }
+    }
+
+    setTimeout(callback, delay) {
+        this.clearTimeouts();
+        this.currentTimeout = setTimeout(() => {
+            this.currentTimeout = null;
+            callback();
+        }, delay);
+    }
+}
+
+const tourState = new TourStateMachine();
+
+// --- 5. UTILITY FUNCTIONS ---
 function showToast(text, type = 'info') {
     let backgroundColor;
     switch (type) {
@@ -103,16 +200,12 @@ function stopSpeech() {
         synth.cancel();
         currentUtterance = null;
     }
-    if (autoAdvanceTimeout) {
-        clearTimeout(autoAdvanceTimeout);
-        autoAdvanceTimeout = null;
-    }
+    tourState.clearTimeouts();
 }
 
-// --- 5. INITIALIZATION ---
+// --- 6. INITIALIZATION ---
 window.initializeTourApp = () => {
     try {
-        // Initialize Google Maps services using new API patterns
         streetView = new google.maps.StreetViewPanorama(streetviewContainer, {
             position: { lat: 40.7291, lng: -73.9965 },
             pov: { heading: 165, pitch: 0 },
@@ -132,6 +225,9 @@ window.initializeTourApp = () => {
         generateTourButton.disabled = false;
         generateTourButton.textContent = 'Generate Tour';
         
+        // Setup state machine listeners
+        setupStateMachineListeners();
+        
         console.log('Tour app initialized successfully');
     } catch (error) {
         console.error('Initialization failed:', error);
@@ -139,12 +235,44 @@ window.initializeTourApp = () => {
     }
 };
 
-// --- 6. MODERN LOCATION FINDING SYSTEM ---
+function setupStateMachineListeners() {
+    tourState.on('stateChange', ({ from, to }) => {
+        updateUIForState(to);
+    });
+}
+
+function updateUIForState(state) {
+    switch (state) {
+        case 'setup':
+            resetUI();
+            break;
+        case 'touring':
+            updateControlsForTouring();
+            break;
+        case 'paused':
+            updateControlsForPaused();
+            break;
+        case 'exploring':
+            updateControlsForExploring();
+            break;
+        case 'gallery':
+            hideAllTourUI();
+            break;
+    }
+}
+
+// --- 7. LOCATION PROCESSING ---
 async function findLocationUsingGeocoding(locationName, cityName) {
     const searchQuery = `${locationName}, ${cityName}`;
     
     return new Promise((resolve, reject) => {
+        const timeoutId = setTimeout(() => {
+            reject(new Error(`Geocoding timeout for ${searchQuery}`));
+        }, 10000);
+
         geocoder.geocode({ address: searchQuery }, (results, status) => {
+            clearTimeout(timeoutId);
+            
             if (status === 'OK' && results && results.length > 0) {
                 const result = results[0];
                 resolve({
@@ -161,20 +289,20 @@ async function findLocationUsingGeocoding(locationName, cityName) {
     });
 }
 
-async function findStreetViewLocation(coordinates, locationName, maxRadius = 150) {
+async function findStreetViewLocation(coordinates, locationName) {
     const position = new google.maps.LatLng(coordinates.lat, coordinates.lng);
     
     return new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
-            reject(new Error(`Street View search timed out for ${locationName}`));
+        const timeoutId = setTimeout(() => {
+            reject(new Error(`Street View timeout for ${locationName}`));
         }, 10000);
         
         streetViewService.getPanorama({
             location: position,
-            radius: maxRadius,
+            radius: 150,
             source: google.maps.StreetViewSource.OUTDOOR
         }, (data, status) => {
-            clearTimeout(timeout);
+            clearTimeout(timeoutId);
             
             if (status === 'OK' && data && data.location) {
                 resolve({
@@ -184,7 +312,6 @@ async function findStreetViewLocation(coordinates, locationName, maxRadius = 150
                     hasStreetView: true
                 });
             } else {
-                console.warn(`No Street View found for ${locationName}, using original coordinates`);
                 resolve({
                     lat: coordinates.lat,
                     lng: coordinates.lng,
@@ -196,7 +323,7 @@ async function findStreetViewLocation(coordinates, locationName, maxRadius = 150
     });
 }
 
-// --- 7. IMPROVED TOUR GENERATION ---
+// --- 8. TOUR GENERATION ---
 async function generateTour() {
     currentDestination = destinationInput.value.trim();
     const selectedFocus = tourFocus.value;
@@ -206,41 +333,32 @@ async function generateTour() {
         return;
     }
     
-    // Reset all state
     resetTourState();
-    tourState = 'touring';
-    tourInProgress = true;
-    
     toggleVisibility(tourSetupContainer, false);
     
     try {
         setLoading(true, `Creating ${selectedFocus} tour for ${currentDestination}...`);
         
-        // Generate itinerary with better error handling
         const rawItinerary = await fetchItinerary(currentDestination, selectedFocus);
         
         if (!rawItinerary || rawItinerary.length === 0) {
             throw new Error('Failed to generate tour itinerary');
         }
         
-        // Process and validate each location
-        setLoading(true, 'Finding precise locations and street views...');
+        setLoading(true, 'Processing locations...');
         tourItinerary = await processItinerary(rawItinerary, currentDestination);
         
         if (tourItinerary.length === 0) {
-            throw new Error('No valid locations found for this tour. Please try a different destination.');
+            throw new Error('No valid locations found for this tour');
         }
         
-        console.log(`Successfully processed ${tourItinerary.length} locations for tour`);
+        console.log(`Successfully processed ${tourItinerary.length} locations`);
         
-        // Initialize tour UI
         await initializeTourUI();
-        
-        // Clear loading and start the tour
         setLoading(false);
         
-        // Start the tour
-        await startTour();
+        // Start the tour with the new state machine
+        startTourSequence();
         
     } catch (error) {
         console.error('Error generating tour:', error);
@@ -254,126 +372,54 @@ async function processItinerary(rawItinerary, cityName) {
     
     for (let i = 0; i < rawItinerary.length; i++) {
         const stop = rawItinerary[i];
-        setLoading(true, `Processing location ${i + 1}/${rawItinerary.length}: ${stop.locationName}...`);
+        setLoading(true, `Processing ${i + 1}/${rawItinerary.length}: ${stop.locationName}...`);
         
         try {
-            // Find coordinates using modern geocoding
             const locationData = await findLocationUsingGeocoding(stop.locationName, cityName);
-            
-            // Find Street View location
             const streetViewData = await findStreetViewLocation(locationData, stop.locationName);
             
             processedStops.push({
                 locationName: stop.locationName,
                 briefDescription: stop.briefDescription,
-                coordinates: {
-                    lat: locationData.lat,
-                    lng: locationData.lng
-                },
-                streetViewCoordinates: {
-                    lat: streetViewData.lat,
-                    lng: streetViewData.lng
-                },
+                coordinates: { lat: locationData.lat, lng: locationData.lng },
+                streetViewCoordinates: { lat: streetViewData.lat, lng: streetViewData.lng },
                 placeId: locationData.placeId,
                 panoId: streetViewData.panoId,
                 hasStreetView: streetViewData.hasStreetView,
-                formattedAddress: locationData.formattedAddress,
-                method: locationData.method
+                formattedAddress: locationData.formattedAddress
             });
             
-            console.log(`✓ Processed: ${stop.locationName} (Street View: ${streetViewData.hasStreetView})`);
+            console.log(`✓ Processed: ${stop.locationName}`);
             
         } catch (error) {
-            console.warn(`✗ Failed to process: ${stop.locationName} - ${error.message}`);
-            // Don't show toast for individual failures to avoid spam
+            console.warn(`✗ Failed: ${stop.locationName} - ${error.message}`);
         }
     }
     
     return processedStops;
 }
 
-// --- 8. TOUR UI INITIALIZATION ---
-async function initializeTourUI() {
-    // Show street view container
-    toggleVisibility(streetviewContainer, true);
-    streetView.setVisible(true);
-    
-    // Show controls
-    toggleVisibility(controlsContainer, true);
-    positionControls();
-    
-    // Initialize control states
-    resetControlStates();
-    
-    console.log('Tour UI initialized');
-}
-
-function resetControlStates() {
-    exploreButton.style.display = 'flex';
-    returnToTourButton.style.display = 'none';
-    pauseTourButton.style.display = 'flex';
-    
-    pauseIcon.textContent = '⏸️';
-    pauseText.textContent = 'Pause Tour';
-    pauseTourButton.className = 'bg-red-500 hover:bg-red-400 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-red-400 transition-colors duration-300 flex items-center gap-2';
-}
-
-// --- 9. TOUR EXECUTION ---
-async function startTour() {
-    if (tourItinerary.length === 0) {
-        throw new Error('No valid stops in itinerary');
-    }
-    
-    console.log('Starting tour with', tourItinerary.length, 'stops');
+// --- 9. TOUR EXECUTION WITH STATE MACHINE ---
+function startTourSequence() {
     currentStopIndex = 0;
+    tourState.start();
     
-    // Move to first stop
-    await moveToStop(tourItinerary[0]);
-    
-    // Start the tour loop
-    tourState = 'touring';
-    console.log('Tour started, beginning tour loop');
-    await runTourLoop();
+    // Move to first location immediately
+    moveToLocation(tourItinerary[0])
+        .then(() => {
+            presentCurrentLocation();
+        })
+        .catch(error => {
+            console.error('Failed to start tour:', error);
+            showToast('Failed to start tour', 'error');
+            resetToMainMenu();
+        });
 }
 
-async function runTourLoop() {
-    while (currentStopIndex < tourItinerary.length && tourInProgress) {
-        const currentStop = tourItinerary[currentStopIndex];
-        
-        // Present the current location
-        await presentLocation(currentStop);
-        
-        // Auto-pause at each location for user interaction
-        tourState = 'paused';
-        updatePauseButton();
-        
-        // Wait for user to continue
-        await waitForUserAction();
-        
-        // Check if tour is still in progress
-        if (!tourInProgress) break;
-        
-        // Check if we're at the last stop
-        if (currentStopIndex === tourItinerary.length - 1) {
-            // Tour completed
-            await completeTour();
-            break;
-        }
-        
-        // Move to next stop
-        const nextStopIndex = currentStopIndex + 1;
-        const nextStop = tourItinerary[nextStopIndex];
-        
-        if (nextStop) {
-            setLoading(true, `Traveling to ${nextStop.locationName}...`);
-            await travelToStop(currentStop, nextStop);
-            currentStopIndex = nextStopIndex;
-        }
-    }
-}
-
-async function moveToStop(stop) {
+async function moveToLocation(stop) {
     try {
+        console.log(`Moving to: ${stop.locationName}`);
+        
         const position = new google.maps.LatLng(stop.streetViewCoordinates.lat, stop.streetViewCoordinates.lng);
         
         if (stop.panoId && stop.hasStreetView) {
@@ -382,13 +428,10 @@ async function moveToStop(stop) {
             streetView.setPosition(position);
         }
         
-        // Set a reasonable view
         streetView.setPov({ heading: 0, pitch: 0 });
         streetView.setZoom(1);
         
         updateAddressLabel(stop.locationName);
-        
-        console.log(`Moved to: ${stop.locationName}`);
         
     } catch (error) {
         console.error(`Error moving to ${stop.locationName}:`, error);
@@ -396,175 +439,193 @@ async function moveToStop(stop) {
     }
 }
 
-async function presentLocation(location) {
-    try {
-        // Stop any current speech
-        stopSpeech();
-        
-        // Show subtitle
-        const subtitle = `${location.locationName}: ${location.briefDescription}`;
-        subtitlesContainer.textContent = subtitle;
-        toggleVisibility(tourInfoContainer, true);
-        
-        // Update controls for current location
-        exploreButton.style.display = 'flex';
-        returnToTourButton.style.display = 'none';
-        pauseTourButton.style.display = 'flex';
-        
-        // Speak the description
-        await speakLocationDescription(location);
-        
-    } catch (error) {
-        console.error(`Error presenting location ${location.locationName}:`, error);
-        toggleVisibility(tourInfoContainer, false);
-    }
+function presentCurrentLocation() {
+    if (currentStopIndex >= tourItinerary.length) return;
+    
+    const location = tourItinerary[currentStopIndex];
+    stopSpeech();
+    
+    // Show information
+    const subtitle = `${location.locationName}: ${location.briefDescription}`;
+    subtitlesContainer.textContent = subtitle;
+    toggleVisibility(tourInfoContainer, true);
+    
+    // Auto-pause at each location
+    tourState.pause();
+    
+    // Speak description
+    speakLocationDescription(location);
 }
 
-async function speakLocationDescription(location) {
+function speakLocationDescription(location) {
     if ('speechSynthesis' in window) {
         const text = `Welcome to ${location.locationName}. ${location.briefDescription}. You can explore this area or continue to the next location.`;
         
-        return new Promise((resolve) => {
-            currentUtterance = new SpeechSynthesisUtterance(text);
-            currentUtterance.rate = 0.9;
-            currentUtterance.pitch = 1.1;
-            
-            currentUtterance.onend = () => {
+        currentUtterance = new SpeechSynthesisUtterance(text);
+        currentUtterance.rate = 0.9;
+        currentUtterance.pitch = 1.1;
+        
+        currentUtterance.onend = () => {
+            toggleVisibility(tourInfoContainer, false);
+            currentUtterance = null;
+        };
+        
+        currentUtterance.onerror = () => {
+            toggleVisibility(tourInfoContainer, false);
+            currentUtterance = null;
+        };
+        
+        synth.speak(currentUtterance);
+        
+        // Fallback timeout
+        tourState.setTimeout(() => {
+            if (currentUtterance) {
+                synth.cancel();
                 toggleVisibility(tourInfoContainer, false);
                 currentUtterance = null;
-                resolve();
-            };
-            
-            currentUtterance.onerror = () => {
-                toggleVisibility(tourInfoContainer, false);
-                currentUtterance = null;
-                resolve();
-            };
-            
-            synth.speak(currentUtterance);
-            
-            // Fallback timeout
-            autoAdvanceTimeout = setTimeout(() => {
-                if (currentUtterance) {
-                    synth.cancel();
-                    toggleVisibility(tourInfoContainer, false);
-                    currentUtterance = null;
-                    resolve();
-                }
-            }, 15000);
-        });
+            }
+        }, 15000);
     } else {
-        // Fallback for browsers without speech synthesis
-        return new Promise((resolve) => {
-            setTimeout(() => {
-                toggleVisibility(tourInfoContainer, false);
-                resolve();
-            }, 5000);
-        });
+        tourState.setTimeout(() => {
+            toggleVisibility(tourInfoContainer, false);
+        }, 5000);
     }
 }
 
-async function travelToStop(fromStop, toStop) {
-    return new Promise((resolve) => {
-        try {
-            const fromPosition = new google.maps.LatLng(fromStop.streetViewCoordinates.lat, fromStop.streetViewCoordinates.lng);
-            const toPosition = new google.maps.LatLng(toStop.streetViewCoordinates.lat, toStop.streetViewCoordinates.lng);
-            
-            // Smooth transition animation
-            const steps = 40;
-            let currentStep = 0;
-            
+function continueToNextLocation() {
+    if (currentStopIndex >= tourItinerary.length - 1) {
+        // Last location - complete tour
+        completeTour();
+        return;
+    }
+    
+    const nextIndex = currentStopIndex + 1;
+    const nextLocation = tourItinerary[nextIndex];
+    
+    setLoading(true, `Traveling to ${nextLocation.locationName}...`);
+    
+    // Use requestAnimationFrame for smooth transitions
+    const transition = createSmoothTransition(
+        tourItinerary[currentStopIndex],
+        nextLocation,
+        () => {
+            setLoading(false);
+            currentStopIndex = nextIndex;
+            presentCurrentLocation();
+        }
+    );
+    
+    transition.start();
+}
+
+function createSmoothTransition(fromStop, toStop, onComplete) {
+    const fromPos = fromStop.streetViewCoordinates;
+    const toPos = toStop.streetViewCoordinates;
+    const duration = 2000; // 2 seconds
+    const startTime = Date.now();
+    
+    return {
+        start() {
             const animate = () => {
-                if (currentStep >= steps) {
-                    // Final positioning
-                    moveToStop(toStop).then(resolve).catch(resolve);
+                if (!tourState.isRunning) {
+                    onComplete();
                     return;
                 }
                 
-                const progress = easeInOutCubic(currentStep / steps);
-                const lat = fromPosition.lat() + (toPosition.lat() - fromPosition.lat()) * progress;
-                const lng = fromPosition.lng() + (toPosition.lng() - fromPosition.lng()) * progress;
+                const elapsed = Date.now() - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const eased = easeInOutCubic(progress);
+                
+                const lat = fromPos.lat + (toPos.lat - fromPos.lat) * eased;
+                const lng = fromPos.lng + (toPos.lng - fromPos.lng) * eased;
                 
                 streetView.setPosition(new google.maps.LatLng(lat, lng));
                 
-                currentStep++;
-                setTimeout(animate, 80);
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                } else {
+                    // Final positioning
+                    moveToLocation(toStop)
+                        .then(onComplete)
+                        .catch(onComplete);
+                }
             };
             
-            animate();
-            
-        } catch (error) {
-            console.error('Error during travel animation:', error);
-            resolve();
+            requestAnimationFrame(animate);
         }
-    });
+    };
 }
 
-// Easing function for smooth animations
 function easeInOutCubic(t) {
     return t < 0.5 ? 4 * t * t * t : (t - 1) * (2 * t - 2) * (2 * t - 2) + 1;
 }
 
-// --- 10. TOUR CONTROLS ---
-async function waitForUserAction() {
-    return new Promise((resolve) => {
-        const checkState = () => {
-            if (tourState === 'touring' || !tourInProgress) {
-                resolve();
-            } else {
-                setTimeout(checkState, 200);
-            }
-        };
-        checkState();
-    });
+// --- 10. UI CONTROL FUNCTIONS ---
+async function initializeTourUI() {
+    toggleVisibility(streetviewContainer, true);
+    streetView.setVisible(true);
+    toggleVisibility(controlsContainer, true);
+    positionControls();
+    updateControlsForPaused();
+    console.log('Tour UI initialized');
 }
 
-function updatePauseButton() {
-    if (currentStopIndex === tourItinerary.length - 1) {
-        // Last stop - show end tour option
+function updateControlsForTouring() {
+    exploreButton.style.display = 'none';
+    returnToTourButton.style.display = 'none';
+    pauseTourButton.style.display = 'flex';
+    
+    pauseIcon.textContent = '⏸️';
+    pauseText.textContent = 'Pause Tour';
+    pauseTourButton.className = 'bg-red-500 hover:bg-red-400 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-red-400 transition-colors duration-300 flex items-center gap-2';
+}
+
+function updateControlsForPaused() {
+    exploreButton.style.display = 'flex';
+    returnToTourButton.style.display = 'none';
+    pauseTourButton.style.display = 'flex';
+    
+    if (currentStopIndex >= tourItinerary.length - 1) {
         pauseIcon.textContent = '🏁';
         pauseText.textContent = 'End Tour';
         pauseTourButton.className = 'bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-2 px-4 rounded-lg shadow-lg border border-cyan-400 transition-colors duration-300 flex items-center gap-2';
     } else {
-        // Regular pause state
         pauseIcon.textContent = '▶️';
-        pauseText.textContent = 'Continue Tour';
+        pauseText.textContent = 'Continue';
         pauseTourButton.className = 'bg-green-500 hover:bg-green-400 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-green-400 transition-colors duration-300 flex items-center gap-2';
     }
 }
 
+function updateControlsForExploring() {
+    exploreButton.style.display = 'none';
+    returnToTourButton.style.display = 'flex';
+    pauseTourButton.style.display = 'none';
+}
+
+// --- 11. TOUR CONTROLS ---
 function togglePause() {
-    if (tourState === 'paused') {
-        if (currentStopIndex === tourItinerary.length - 1) {
-            // End tour
+    if (tourState.state === 'paused') {
+        if (currentStopIndex >= tourItinerary.length - 1) {
             completeTour();
         } else {
-            // Continue tour
-            tourState = 'touring';
-            pauseIcon.textContent = '⏸️';
-            pauseText.textContent = 'Pause Tour';
-            pauseTourButton.className = 'bg-red-500 hover:bg-red-400 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-red-400 transition-colors duration-300 flex items-center gap-2';
-            exploreButton.style.display = 'none';
+            tourState.resume();
+            continueToNextLocation();
         }
-    } else if (tourState === 'touring') {
-        // Pause tour
-        tourState = 'paused';
-        updatePauseButton();
-        exploreButton.style.display = 'flex';
+    } else if (tourState.state === 'touring') {
+        tourState.pause();
     }
 }
 
 async function exploreCurrentLocation() {
-    if (tourState !== 'paused' || currentStopIndex >= tourItinerary.length) return;
+    if (tourState.state !== 'paused' || currentStopIndex >= tourItinerary.length) return;
     
     const currentStop = tourItinerary[currentStopIndex];
-    tourState = 'exploring';
+    tourState.explore();
     exploreLocation = streetView.getPosition();
     
     setLoading(true, `Exploring ${currentStop.locationName}...`);
     
     try {
-        // Try to find a different view or closer position
         const betterView = await findBetterView(currentStop);
         
         if (betterView) {
@@ -573,25 +634,18 @@ async function exploreCurrentLocation() {
             } else {
                 streetView.setPosition(new google.maps.LatLng(betterView.lat, betterView.lng));
             }
-            showToast('Found a different view of this location!', 'success');
+            showToast('Found a different view!', 'success');
         } else {
-            // Just adjust the view angle
             const currentPov = streetView.getPov();
             streetView.setPov({
                 heading: (currentPov.heading + 90) % 360,
-                pitch: currentPov.pitch + 10
+                pitch: Math.max(-90, Math.min(90, currentPov.pitch + 10))
             });
-            showToast('Adjusted view angle', 'info');
+            showToast('Adjusted view', 'info');
         }
-        
-        // Update UI for explore mode
-        exploreButton.style.display = 'none';
-        pauseTourButton.style.display = 'none';
-        returnToTourButton.style.display = 'flex';
         
     } catch (error) {
         showToast('Exploration complete', 'info');
-        tourState = 'paused';
     } finally {
         setLoading(false);
     }
@@ -599,15 +653,18 @@ async function exploreCurrentLocation() {
 
 async function findBetterView(stop) {
     try {
-        // Try to find a panorama within a smaller radius for a different perspective
         const position = new google.maps.LatLng(stop.coordinates.lat, stop.coordinates.lng);
         
         return new Promise((resolve) => {
+            const timeoutId = setTimeout(() => resolve(null), 5000);
+            
             streetViewService.getPanorama({
                 location: position,
                 radius: 75,
                 source: google.maps.StreetViewSource.OUTDOOR
             }, (data, status) => {
+                clearTimeout(timeoutId);
+                
                 if (status === 'OK' && data && data.location && data.location.pano !== stop.panoId) {
                     resolve({
                         panoId: data.location.pano,
@@ -629,47 +686,93 @@ function returnToMainTour() {
         streetView.setPosition(exploreLocation);
         exploreLocation = null;
     } else if (currentStopIndex < tourItinerary.length) {
-        // Return to current stop position
-        moveToStop(tourItinerary[currentStopIndex]);
+        moveToLocation(tourItinerary[currentStopIndex]);
     }
     
-    tourState = 'paused';
-    returnToTourButton.style.display = 'none';
-    exploreButton.style.display = 'flex';
-    pauseTourButton.style.display = 'flex';
+    tourState.endExploring();
 }
 
-// --- 11. TOUR COMPLETION ---
+// --- 12. TOUR COMPLETION ---
 async function completeTour() {
-    tourInProgress = false;
-    tourState = 'gallery';
+    tourState.complete();
     stopSpeech();
     
-    setLoading(true, 'Tour completed! Creating your photo gallery...');
+    setLoading(true, 'Creating your photo gallery...');
     
     try {
         await showFinalGallery(currentDestination);
     } catch (error) {
-        console.error('Error showing final gallery:', error);
-        showToast('Tour completed! Gallery could not be loaded.', 'info');
+        console.error('Error showing gallery:', error);
+        showToast('Tour completed!', 'info');
         resetToMainMenu();
     }
 }
 
-// --- 12. ITINERARY FETCHING ---
+// --- 13. UTILITY AND RESET FUNCTIONS ---
+function resetTourState() {
+    stopSpeech();
+    if (localTimeInterval) clearInterval(localTimeInterval);
+    
+    tourState.reset();
+    destinationTimezone = null;
+    currentStopIndex = 0;
+    exploreLocation = null;
+    tourItinerary = [];
+}
+
+function resetUI() {
+    toggleVisibility(galleryContainer, false);
+    toggleVisibility(streetviewContainer, false);
+    toggleVisibility(addressLabel, false);
+    toggleVisibility(controlsContainer, false);
+    toggleVisibility(tourInfoContainer, false);
+    
+    if (streetView) streetView.setVisible(false);
+    
+    destinationInput.value = '';
+    generateTourButton.disabled = false;
+    generateTourButton.textContent = 'Generate Tour';
+    toggleVisibility(tourSetupContainer, true);
+    
+    if (galleryGrid) galleryGrid.innerHTML = '';
+    setLoading(false);
+}
+
+function hideAllTourUI() {
+    toggleVisibility(streetviewContainer, false);
+    toggleVisibility(controlsContainer, false);
+    toggleVisibility(addressLabel, false);
+    toggleVisibility(tourInfoContainer, false);
+    if (streetView) streetView.setVisible(false);
+}
+
+function resetToMainMenu() {
+    resetTourState();
+    resetUI();
+    console.log('Reset to main menu');
+}
+
+function positionControls() {
+    if (controlsContainer && window.innerHeight) {
+        controlsContainer.style.bottom = '120px';
+        controlsContainer.style.right = '16px';
+    }
+}
+
+// --- 14. ITINERARY FETCHING ---
 async function fetchItinerary(destination, focus) {
     const prompt = `
         Create a 5-stop virtual tour itinerary for "${destination}" with focus on "${focus}".
         
         For each stop, provide:
-        1. "locationName": Specific landmark/attraction name (be very specific with exact names)
+        1. "locationName": Specific landmark/attraction name
         2. "briefDescription": One engaging sentence about this location
         
-        Make sure locations are well-known, publicly accessible places that would have Street View coverage.
+        Ensure locations are well-known, publicly accessible places with Street View coverage.
         
-        Respond with ONLY a valid JSON array. No other text.
+        Respond with ONLY a valid JSON array.
         
-        Example format:
+        Example:
         [
             {
                 "locationName": "Statue of Liberty",
@@ -696,24 +799,12 @@ async function fetchItinerary(destination, focus) {
         }
         
         const data = await response.json();
-        if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
-            throw new Error('Invalid API response format');
-        }
-        
         const itinerary = JSON.parse(data.candidates[0].content.parts[0].text);
         
         if (!Array.isArray(itinerary) || itinerary.length === 0) {
             throw new Error("Invalid itinerary format");
         }
         
-        // Validate each stop
-        itinerary.forEach((stop, index) => {
-            if (!stop.locationName || !stop.briefDescription) {
-                throw new Error(`Invalid stop at index ${index}`);
-            }
-        });
-        
-        console.log(`Generated itinerary with ${itinerary.length} stops`);
         return itinerary;
         
     } catch (error) {
@@ -722,62 +813,9 @@ async function fetchItinerary(destination, focus) {
     }
 }
 
-// --- 13. UI HELPERS ---
-function positionControls() {
-    if (controlsContainer && window.innerHeight) {
-        controlsContainer.style.bottom = '120px';
-        controlsContainer.style.right = '16px';
-    }
-}
-
-function resetTourState() {
-    stopSpeech();
-    if (localTimeInterval) clearInterval(localTimeInterval);
-    
-    tourInProgress = false;
-    tourState = 'setup';
-    destinationTimezone = null;
-    currentStopIndex = 0;
-    exploreLocation = null;
-    tourItinerary = [];
-}
-
-function resetToMainMenu() {
-    resetTourState();
-    
-    // Reset UI
-    toggleVisibility(galleryContainer, false);
-    toggleVisibility(streetviewContainer, false);
-    toggleVisibility(addressLabel, false);
-    toggleVisibility(controlsContainer, false);
-    toggleVisibility(tourInfoContainer, false);
-    
-    if (streetView) {
-        streetView.setVisible(false);
-    }
-    
-    // Reset form
-    destinationInput.value = '';
-    generateTourButton.disabled = false;
-    generateTourButton.textContent = 'Generate Tour';
-    toggleVisibility(tourSetupContainer, true);
-    
-    // Clear gallery
-    if (galleryGrid) {
-        galleryGrid.innerHTML = '';
-    }
-    
-    setLoading(false);
-    console.log('Reset to main menu');
-}
-
-// --- 14. GALLERY AND LOCAL INFO (Simplified) ---
+// --- 15. GALLERY FUNCTIONS (Simplified for reliability) ---
 async function showFinalGallery(destination) {
-    toggleVisibility(streetviewContainer, false);
-    if (streetView) streetView.setVisible(false);
-    toggleVisibility(controlsContainer, false);
-    toggleVisibility(addressLabel, false);
-    toggleVisibility(tourInfoContainer, false);
+    hideAllTourUI();
     
     try {
         const [images, videos, localInfo] = await Promise.all([
@@ -786,7 +824,6 @@ async function showFinalGallery(destination) {
             fetchLocalInfo(destination).catch(() => ({ weather: { text: 'Unavailable', emoji: '❔' }, timezone: null }))
         ]);
         
-        // Update local information
         if (localInfo.timezone) {
             destinationTimezone = localInfo.timezone;
             updateLocalTime(localTime);
@@ -798,14 +835,12 @@ async function showFinalGallery(destination) {
             localWeather.textContent = `${localInfo.weather.emoji} ${localInfo.weather.text}`;
         }
         
-        // Fetch news separately to avoid blocking
         fetchNewsOutlets(destination).then(news => {
             populateNews(news, localNews);
         }).catch(() => {
             localNews.innerHTML = '<p class="text-slate-400">News unavailable</p>';
         });
         
-        // Combine gallery items
         const galleryItems = [...images, ...videos];
         galleryItems.sort(() => Math.random() - 0.5);
         
@@ -815,11 +850,8 @@ async function showFinalGallery(destination) {
         toggleVisibility(galleryContainer, true);
         
     } catch (error) {
-        console.error("Failed to create gallery:", error);
+        console.error("Gallery creation failed:", error);
         setLoading(false);
-        showToast(`Gallery loaded with limited content`, 'info');
-        
-        // Show gallery anyway with minimal content
         galleryTitle.textContent = `Tour Complete: ${destination}`;
         galleryGrid.innerHTML = '<p class="text-slate-400 col-span-full text-center">Gallery content unavailable</p>';
         toggleVisibility(galleryContainer, true);
@@ -827,7 +859,7 @@ async function showFinalGallery(destination) {
 }
 
 async function fetchLocalInfo(query) {
-    const prompt = `Provide current local information for ${query}. Respond with valid JSON containing "weather" (object with "temp_c", "temp_f", "condition") and "timezone" (IANA timezone string).`;
+    const prompt = `Provide local information for ${query}. Respond with JSON containing "weather" (object with "temp_c", "temp_f", "condition") and "timezone" (IANA timezone).`;
     
     try {
         const response = await fetch(GEMINI_API_URL, {
@@ -835,14 +867,11 @@ async function fetchLocalInfo(query) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: {
-                    temperature: 0,
-                    response_mime_type: "application/json"
-                }
+                generationConfig: { temperature: 0, response_mime_type: "application/json" }
             }),
         });
         
-        if (!response.ok) throw new Error('Local info API request failed');
+        if (!response.ok) throw new Error('Local info request failed');
         
         const data = await response.json();
         const info = JSON.parse(data.candidates[0].content.parts[0].text);
@@ -854,10 +883,10 @@ async function fetchLocalInfo(query) {
             const condition = info.weather.condition.toLowerCase();
             if (condition.includes('sun') || condition.includes('clear')) weatherEmoji = '☀️';
             else if (condition.includes('cloud')) weatherEmoji = '☁️';
-            else if (condition.includes('rain') || condition.includes('shower')) weatherEmoji = '🌧️';
+            else if (condition.includes('rain')) weatherEmoji = '🌧️';
             else if (condition.includes('storm')) weatherEmoji = '⛈️';
             else if (condition.includes('snow')) weatherEmoji = '❄️';
-            else if (condition.includes('fog') || condition.includes('mist')) weatherEmoji = '🌫️';
+            else if (condition.includes('fog')) weatherEmoji = '🌫️';
             
             weatherText = `${info.weather.temp_f}°F / ${info.weather.temp_c}°C, ${info.weather.condition}`;
         }
@@ -868,11 +897,7 @@ async function fetchLocalInfo(query) {
         };
         
     } catch (error) {
-        console.error("Could not fetch local info:", error);
-        return { 
-            weather: { text: 'Unavailable', emoji: '❔' }, 
-            timezone: null 
-        };
+        return { weather: { text: 'Unavailable', emoji: '❔' }, timezone: null };
     }
 }
 
@@ -881,15 +906,12 @@ async function fetchImages(query) {
     
     try {
         const response = await fetch(url);
-        if (!response.ok) throw new Error(`Image search failed: ${response.status}`);
+        if (!response.ok) throw new Error('Image search failed');
         
         const data = await response.json();
-        if (!data.items) return [];
-        
-        return data.items.map(item => ({ type: 'image', url: item.link }));
+        return data.items ? data.items.map(item => ({ type: 'image', url: item.link })) : [];
         
     } catch (error) {
-        console.error("Could not fetch images:", error);
         return [];
     }
 }
@@ -899,21 +921,18 @@ async function fetchVideos(query) {
     
     try {
         const response = await fetch(url);
-        if (!response.ok) throw new Error(`YouTube search failed: ${response.status}`);
+        if (!response.ok) throw new Error('YouTube search failed');
         
         const data = await response.json();
-        if (!data.items) return [];
-        
-        return data.items.map(item => ({ type: 'video', videoId: item.id.videoId }));
+        return data.items ? data.items.map(item => ({ type: 'video', videoId: item.id.videoId })) : [];
         
     } catch (error) {
-        console.error("Could not fetch videos:", error);
         return [];
     }
 }
 
 async function fetchNewsOutlets(query) {
-    const prompt = `List 3-4 major local news outlets for ${query}. Respond with valid JSON array of objects with "name" and "url" properties.`;
+    const prompt = `List 3-4 major local news outlets for ${query}. Respond with JSON array of objects with "name" and "url" properties.`;
     
     try {
         const response = await fetch(GEMINI_API_URL, {
@@ -921,20 +940,16 @@ async function fetchNewsOutlets(query) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: {
-                    temperature: 0.2,
-                    response_mime_type: "application/json"
-                }
+                generationConfig: { temperature: 0.2, response_mime_type: "application/json" }
             }),
         });
         
-        if (!response.ok) throw new Error('News API request failed');
+        if (!response.ok) throw new Error('News request failed');
         
         const data = await response.json();
         return JSON.parse(data.candidates[0].content.parts[0].text);
         
     } catch (error) {
-        console.error("Could not fetch news:", error);
         return [];
     }
 }
@@ -1012,7 +1027,7 @@ function updateLocalTime(element) {
     }, 1000);
 }
 
-// --- 15. EVENT LISTENERS ---
+// --- 16. EVENT LISTENERS ---
 generateTourButton.addEventListener('click', generateTour);
 endTourButton.addEventListener('click', resetToMainMenu);
 pauseTourButton.addEventListener('click', togglePause);
@@ -1020,15 +1035,13 @@ exploreButton.addEventListener('click', exploreCurrentLocation);
 returnToTourButton.addEventListener('click', returnToMainTour);
 window.addEventListener('resize', positionControls);
 
-// Input validation
 destinationInput.addEventListener('input', (e) => {
     const value = e.target.value.trim();
     generateTourButton.disabled = !value;
 });
 
-// Keyboard shortcuts
 document.addEventListener('keydown', (e) => {
-    if (tourState === 'paused') {
+    if (tourState.state === 'paused') {
         if (e.key === ' ' || e.key === 'Enter') {
             e.preventDefault();
             togglePause();
