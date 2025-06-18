@@ -820,61 +820,106 @@ async function exploreCurrentLocation() {
     setLoading(true, `Exploring ${currentStop.locationName}...`);
     
     try {
-        const betterView = await findBetterView(currentStop);
+        const randomPanorama = await findRandomPanoramaInArea(currentStop);
         
-        if (betterView) {
-            if (betterView.panoId) {
-                streetView.setPano(betterView.panoId);
-            } else {
-                streetView.setPosition(new google.maps.LatLng(betterView.lat, betterView.lng));
-            }
-            showToast('Found a different view!', 'success');
-        } else {
-            const currentPov = streetView.getPov();
+        if (randomPanorama && randomPanorama.panoId) {
+            streetView.setPano(randomPanorama.panoId);
             streetView.setPov({
-                heading: (currentPov.heading + 90) % 360,
-                pitch: Math.max(-90, Math.min(90, currentPov.pitch + 10))
+                heading: Math.random() * 360,
+                pitch: Math.random() * 30 - 10, // Random pitch between -10 and 20
+                zoom: 1
             });
-            showToast('Adjusted view', 'info');
+            showToast(`Found a different spot in ${currentStop.locationName}!`, 'success');
+        } else {
+            // Fallback: try to find any panorama within larger radius
+            const fallbackPanorama = await findNearbyPanorama(currentStop, 300);
+            if (fallbackPanorama && fallbackPanorama.panoId) {
+                streetView.setPano(fallbackPanorama.panoId);
+                streetView.setPov({
+                    heading: Math.random() * 360,
+                    pitch: Math.random() * 30 - 10,
+                    zoom: 1
+                });
+                showToast('Found a nearby viewpoint!', 'success');
+            } else {
+                showToast('No other viewpoints available in this area', 'info');
+            }
         }
         
     } catch (error) {
+        console.error('Exploration error:', error);
         showToast('Exploration complete', 'info');
     } finally {
         setLoading(false);
     }
 }
 
-async function findBetterView(stop) {
-    try {
-        // Use the original geocoded coordinates for exploration
-        const basePosition = new google.maps.LatLng(stop.coordinates.lat, stop.coordinates.lng);
-        
-        return new Promise((resolve) => {
-            const timeoutId = setTimeout(() => resolve(null), 4000);
+async function findRandomPanoramaInArea(stop) {
+    // Generate multiple random points within the area around the location
+    const searchAttempts = 8;
+    const baseRadius = 150; // meters
+    const maxRadius = 250;
+    
+    for (let attempt = 0; attempt < searchAttempts; attempt++) {
+        try {
+            // Create random offset within circular area
+            const radius = baseRadius + Math.random() * (maxRadius - baseRadius);
+            const angle = Math.random() * 2 * Math.PI;
             
-            streetViewService.getPanorama({
-                location: basePosition,
-                radius: 100,
-                source: google.maps.StreetViewSource.OUTDOOR,
-                preference: google.maps.StreetViewPreference.NEAREST
-            }, (data, status) => {
-                clearTimeout(timeoutId);
-                
-                if (status === 'OK' && data?.location && data.location.pano !== stop.panoId) {
-                    resolve({
-                        panoId: data.location.pano,
-                        lat: data.location.latLng.lat(),
-                        lng: data.location.latLng.lng()
-                    });
-                } else {
-                    resolve(null);
-                }
-            });
-        });
-    } catch (error) {
-        return null;
+            // Convert to lat/lng offset (rough approximation)
+            const latOffset = (radius / 111000) * Math.cos(angle); // ~111km per degree lat
+            const lngOffset = (radius / (111000 * Math.cos(stop.coordinates.lat * Math.PI / 180))) * Math.sin(angle);
+            
+            const searchLat = stop.coordinates.lat + latOffset;
+            const searchLng = stop.coordinates.lng + lngOffset;
+            const searchPosition = new google.maps.LatLng(searchLat, searchLng);
+            
+            const panorama = await searchPanoramaAtLocation(searchPosition, 75);
+            
+            if (panorama && panorama.panoId && panorama.panoId !== stop.panoId) {
+                console.log(`Found random panorama at attempt ${attempt + 1}`);
+                return panorama;
+            }
+            
+        } catch (error) {
+            console.warn(`Search attempt ${attempt + 1} failed:`, error);
+        }
+        
+        // Small delay between attempts
+        await new Promise(resolve => setTimeout(resolve, 200));
     }
+    
+    return null;
+}
+
+async function findNearbyPanorama(stop, radius) {
+    const basePosition = new google.maps.LatLng(stop.coordinates.lat, stop.coordinates.lng);
+    return await searchPanoramaAtLocation(basePosition, radius);
+}
+
+async function searchPanoramaAtLocation(position, radius) {
+    return new Promise((resolve) => {
+        const timeoutId = setTimeout(() => resolve(null), 5000);
+        
+        streetViewService.getPanorama({
+            location: position,
+            radius: radius,
+            source: google.maps.StreetViewSource.OUTDOOR,
+            preference: google.maps.StreetViewPreference.NEAREST
+        }, (data, status) => {
+            clearTimeout(timeoutId);
+            
+            if (status === 'OK' && data?.location) {
+                resolve({
+                    panoId: data.location.pano,
+                    lat: data.location.latLng.lat(),
+                    lng: data.location.latLng.lng()
+                });
+            } else {
+                resolve(null);
+            }
+        });
+    });
 }
 
 function returnToMainTour() {
