@@ -221,6 +221,7 @@ window.initializeTourApp = () => {
         
         geocoder = new google.maps.Geocoder();
         streetViewService = new google.maps.StreetViewService();
+        locationProcessor = new LocationProcessor(geocoder, streetViewService);
         
         generateTourButton.disabled = false;
         generateTourButton.textContent = 'Generate Tour';
@@ -261,67 +262,232 @@ function updateUIForState(state) {
     }
 }
 
-// --- 7. LOCATION PROCESSING ---
-async function findLocationUsingGeocoding(locationName, cityName) {
-    const searchQuery = `${locationName}, ${cityName}`;
-    
-    return new Promise((resolve, reject) => {
-        const timeoutId = setTimeout(() => {
-            reject(new Error(`Geocoding timeout for ${searchQuery}`));
-        }, 10000);
+// --- 7. OPTIMIZED LOCATION PROCESSING ---
+class LocationProcessor {
+    constructor(geocoder, streetViewService) {
+        this.geocoder = geocoder;
+        this.streetViewService = streetViewService;
+        this.cache = new Map();
+    }
 
-        geocoder.geocode({ address: searchQuery }, (results, status) => {
-            clearTimeout(timeoutId);
-            
-            if (status === 'OK' && results && results.length > 0) {
-                const result = results[0];
-                resolve({
-                    lat: result.geometry.location.lat(),
-                    lng: result.geometry.location.lng(),
-                    placeId: result.place_id,
-                    formattedAddress: result.formatted_address,
-                    method: 'geocoding'
-                });
-            } else {
-                reject(new Error(`Geocoding failed for ${searchQuery}: ${status}`));
-            }
-        });
-    });
-}
-
-async function findStreetViewLocation(coordinates, locationName) {
-    const position = new google.maps.LatLng(coordinates.lat, coordinates.lng);
-    
-    return new Promise((resolve, reject) => {
-        const timeoutId = setTimeout(() => {
-            reject(new Error(`Street View timeout for ${locationName}`));
-        }, 10000);
+    async processLocation(locationName, cityName) {
+        const cacheKey = `${locationName}_${cityName}`;
         
-        streetViewService.getPanorama({
-            location: position,
-            radius: 150,
-            source: google.maps.StreetViewSource.OUTDOOR
-        }, (data, status) => {
-            clearTimeout(timeoutId);
+        if (this.cache.has(cacheKey)) {
+            return this.cache.get(cacheKey);
+        }
+
+        try {
+            const result = await this._findOptimalLocation(locationName, cityName);
+            this.cache.set(cacheKey, result);
+            return result;
+        } catch (error) {
+            console.error(`Failed to process ${locationName}:`, error);
+            throw error;
+        }
+    }
+
+    async _findOptimalLocation(locationName, cityName) {
+        // Step 1: Get multiple geocoding candidates
+        const candidates = await this._getGeocodingCandidates(locationName, cityName);
+        
+        if (candidates.length === 0) {
+            throw new Error(`No geocoding results for ${locationName}`);
+        }
+
+        // Step 2: Find the best candidate with Street View
+        for (const candidate of candidates) {
+            const streetViewResult = await this._findNearestStreetView(candidate);
             
-            if (status === 'OK' && data && data.location) {
-                resolve({
-                    lat: data.location.latLng.lat(),
-                    lng: data.location.latLng.lng(),
-                    panoId: data.location.pano,
-                    hasStreetView: true
-                });
-            } else {
-                resolve({
-                    lat: coordinates.lat,
-                    lng: coordinates.lng,
-                    panoId: null,
-                    hasStreetView: false
-                });
+            if (streetViewResult.hasStreetView) {
+                return {
+                    locationName,
+                    coordinates: candidate,
+                    streetViewCoordinates: streetViewResult,
+                    placeId: candidate.placeId,
+                    panoId: streetViewResult.panoId,
+                    hasStreetView: true,
+                    formattedAddress: candidate.formattedAddress
+                };
             }
+        }
+
+        // Step 3: Fallback to first candidate without Street View
+        const fallback = candidates[0];
+        return {
+            locationName,
+            coordinates: fallback,
+            streetViewCoordinates: fallback,
+            placeId: fallback.placeId,
+            panoId: null,
+            hasStreetView: false,
+            formattedAddress: fallback.formattedAddress
+        };
+    }
+
+    async _getGeocodingCandidates(locationName, cityName) {
+        const queries = [
+            `${locationName}, ${cityName}`,
+            `${locationName}`,
+            `${locationName} ${cityName}`,
+            `${locationName} landmark ${cityName}`
+        ];
+
+        const candidates = [];
+        
+        for (const query of queries) {
+            try {
+                const results = await this._geocodeQuery(query);
+                candidates.push(...results);
+                
+                if (candidates.length >= 3) break; // Enough candidates
+            } catch (error) {
+                console.warn(`Geocoding failed for "${query}":`, error.message);
+            }
+        }
+
+        // Remove duplicates and prioritize by accuracy
+        return this._deduplicateAndSort(candidates, cityName);
+    }
+
+    async _geocodeQuery(query) {
+        return new Promise((resolve, reject) => {
+            const timeoutId = setTimeout(() => {
+                reject(new Error('Geocoding timeout'));
+            }, 8000);
+
+            this.geocoder.geocode(
+                { 
+                    address: query,
+                    region: 'global'
+                }, 
+                (results, status) => {
+                    clearTimeout(timeoutId);
+                    
+                    if (status === 'OK' && results?.length > 0) {
+                        const candidates = results.slice(0, 3).map(result => ({
+                            lat: result.geometry.location.lat(),
+                            lng: result.geometry.location.lng(),
+                            placeId: result.place_id,
+                            formattedAddress: result.formatted_address,
+                            types: result.types || [],
+                            accuracy: this._calculateAccuracy(result)
+                        }));
+                        resolve(candidates);
+                    } else {
+                        reject(new Error(`Geocoding failed: ${status}`));
+                    }
+                }
+            );
         });
-    });
+    }
+
+    async _findNearestStreetView(coordinates) {
+        const position = new google.maps.LatLng(coordinates.lat, coordinates.lng);
+        const searchRadii = [50, 100, 200, 500]; // Progressive search
+
+        for (const radius of searchRadii) {
+            try {
+                const result = await this._searchStreetViewWithRadius(position, radius);
+                if (result.hasStreetView) {
+                    return result;
+                }
+            } catch (error) {
+                console.warn(`Street View search failed at radius ${radius}:`, error.message);
+            }
+        }
+
+        return {
+            lat: coordinates.lat,
+            lng: coordinates.lng,
+            panoId: null,
+            hasStreetView: false
+        };
+    }
+
+    async _searchStreetViewWithRadius(position, radius) {
+        return new Promise((resolve, reject) => {
+            const timeoutId = setTimeout(() => {
+                reject(new Error('Street View timeout'));
+            }, 6000);
+
+            this.streetViewService.getPanorama({
+                location: position,
+                radius: radius,
+                source: google.maps.StreetViewSource.OUTDOOR,
+                preference: google.maps.StreetViewPreference.NEAREST
+            }, (data, status) => {
+                clearTimeout(timeoutId);
+                
+                if (status === 'OK' && data?.location) {
+                    resolve({
+                        lat: data.location.latLng.lat(),
+                        lng: data.location.latLng.lng(),
+                        panoId: data.location.pano,
+                        hasStreetView: true,
+                        radius: radius
+                    });
+                } else {
+                    resolve({
+                        lat: position.lat(),
+                        lng: position.lng(),
+                        panoId: null,
+                        hasStreetView: false
+                    });
+                }
+            });
+        });
+    }
+
+    _calculateAccuracy(result) {
+        let score = 0;
+        
+        // Prefer specific place types
+        const highValueTypes = ['tourist_attraction', 'museum', 'park', 'landmark', 'establishment'];
+        const mediumValueTypes = ['point_of_interest', 'premise'];
+        
+        if (result.types.some(type => highValueTypes.includes(type))) score += 10;
+        else if (result.types.some(type => mediumValueTypes.includes(type))) score += 5;
+        
+        // Prefer more precise geometry
+        if (result.geometry.location_type === 'ROOFTOP') score += 8;
+        else if (result.geometry.location_type === 'RANGE_INTERPOLATED') score += 5;
+        else if (result.geometry.location_type === 'GEOMETRIC_CENTER') score += 3;
+        
+        return score;
+    }
+
+    _deduplicateAndSort(candidates, cityName) {
+        // Remove duplicates based on coordinates proximity
+        const unique = [];
+        const threshold = 0.001; // ~100m
+        
+        for (const candidate of candidates) {
+            const isDuplicate = unique.some(existing => 
+                Math.abs(existing.lat - candidate.lat) < threshold &&
+                Math.abs(existing.lng - candidate.lng) < threshold
+            );
+            
+            if (!isDuplicate) {
+                // Boost score if address contains city name
+                if (candidate.formattedAddress.toLowerCase().includes(cityName.toLowerCase())) {
+                    candidate.accuracy += 5;
+                }
+                unique.push(candidate);
+            }
+        }
+        
+        // Sort by accuracy score (highest first)
+        return unique.sort((a, b) => b.accuracy - a.accuracy);
+    }
+
+    clearCache() {
+        this.cache.clear();
+    }
 }
+
+// Initialize location processor
+let locationProcessor;
 
 // --- 8. TOUR GENERATION ---
 async function generateTour() {
@@ -369,30 +535,39 @@ async function generateTour() {
 
 async function processItinerary(rawItinerary, cityName) {
     const processedStops = [];
+    const batchSize = 2; // Process in small batches to avoid rate limits
     
-    for (let i = 0; i < rawItinerary.length; i++) {
-        const stop = rawItinerary[i];
-        setLoading(true, `Processing ${i + 1}/${rawItinerary.length}: ${stop.locationName}...`);
+    for (let i = 0; i < rawItinerary.length; i += batchSize) {
+        const batch = rawItinerary.slice(i, i + batchSize);
+        const batchPromises = batch.map(async (stop, batchIndex) => {
+            const globalIndex = i + batchIndex;
+            setLoading(true, `Processing ${globalIndex + 1}/${rawItinerary.length}: ${stop.locationName}...`);
+            
+            try {
+                const locationData = await locationProcessor.processLocation(stop.locationName, cityName);
+                
+                return {
+                    ...locationData,
+                    briefDescription: stop.briefDescription
+                };
+            } catch (error) {
+                console.warn(`✗ Failed: ${stop.locationName} - ${error.message}`);
+                return null;
+            }
+        });
         
-        try {
-            const locationData = await findLocationUsingGeocoding(stop.locationName, cityName);
-            const streetViewData = await findStreetViewLocation(locationData, stop.locationName);
-            
-            processedStops.push({
-                locationName: stop.locationName,
-                briefDescription: stop.briefDescription,
-                coordinates: { lat: locationData.lat, lng: locationData.lng },
-                streetViewCoordinates: { lat: streetViewData.lat, lng: streetViewData.lng },
-                placeId: locationData.placeId,
-                panoId: streetViewData.panoId,
-                hasStreetView: streetViewData.hasStreetView,
-                formattedAddress: locationData.formattedAddress
-            });
-            
-            console.log(`✓ Processed: ${stop.locationName}`);
-            
-        } catch (error) {
-            console.warn(`✗ Failed: ${stop.locationName} - ${error.message}`);
+        const batchResults = await Promise.allSettled(batchPromises);
+        
+        batchResults.forEach((result, batchIndex) => {
+            if (result.status === 'fulfilled' && result.value) {
+                processedStops.push(result.value);
+                console.log(`✓ Processed: ${result.value.locationName}`);
+            }
+        });
+        
+        // Small delay between batches to respect rate limits
+        if (i + batchSize < rawItinerary.length) {
+            await new Promise(resolve => setTimeout(resolve, 500));
         }
     }
     
@@ -418,20 +593,39 @@ function startTourSequence() {
 
 async function moveToLocation(stop) {
     try {
-        console.log(`Moving to: ${stop.locationName}`);
+        console.log(`Moving to: ${stop.locationName}${stop.hasStreetView ? ' (Street View)' : ' (Satellite)'}`);
         
-        const position = new google.maps.LatLng(stop.streetViewCoordinates.lat, stop.streetViewCoordinates.lng);
-        
-        if (stop.panoId && stop.hasStreetView) {
+        if (stop.hasStreetView && stop.panoId) {
+            // Use specific panorama ID for better accuracy
             streetView.setPano(stop.panoId);
+            streetView.setPov({ 
+                heading: 0, 
+                pitch: 5, // Slight upward angle for better view
+                zoom: 1 
+            });
         } else {
+            // Fallback to coordinates
+            const position = new google.maps.LatLng(
+                stop.streetViewCoordinates.lat, 
+                stop.streetViewCoordinates.lng
+            );
             streetView.setPosition(position);
+            streetView.setPov({ 
+                heading: 0, 
+                pitch: 0, 
+                zoom: 1 
+            });
         }
         
-        streetView.setPov({ heading: 0, pitch: 0 });
-        streetView.setZoom(1);
+        updateAddressLabel(stop.formattedAddress || stop.locationName);
         
-        updateAddressLabel(stop.locationName);
+        // Verify the position was set correctly
+        setTimeout(() => {
+            const currentPos = streetView.getPosition();
+            if (currentPos) {
+                console.log(`✓ Positioned at: ${currentPos.lat().toFixed(6)}, ${currentPos.lng().toFixed(6)}`);
+            }
+        }, 1000);
         
     } catch (error) {
         console.error(`Error moving to ${stop.locationName}:`, error);
@@ -653,19 +847,21 @@ async function exploreCurrentLocation() {
 
 async function findBetterView(stop) {
     try {
-        const position = new google.maps.LatLng(stop.coordinates.lat, stop.coordinates.lng);
+        // Use the original geocoded coordinates for exploration
+        const basePosition = new google.maps.LatLng(stop.coordinates.lat, stop.coordinates.lng);
         
         return new Promise((resolve) => {
-            const timeoutId = setTimeout(() => resolve(null), 5000);
+            const timeoutId = setTimeout(() => resolve(null), 4000);
             
             streetViewService.getPanorama({
-                location: position,
-                radius: 75,
-                source: google.maps.StreetViewSource.OUTDOOR
+                location: basePosition,
+                radius: 100,
+                source: google.maps.StreetViewSource.OUTDOOR,
+                preference: google.maps.StreetViewPreference.NEAREST
             }, (data, status) => {
                 clearTimeout(timeoutId);
                 
-                if (status === 'OK' && data && data.location && data.location.pano !== stop.panoId) {
+                if (status === 'OK' && data?.location && data.location.pano !== stop.panoId) {
                     resolve({
                         panoId: data.location.pano,
                         lat: data.location.latLng.lat(),
@@ -718,6 +914,11 @@ function resetTourState() {
     currentStopIndex = 0;
     exploreLocation = null;
     tourItinerary = [];
+    
+    // Clear location cache for fresh processing
+    if (locationProcessor) {
+        locationProcessor.clearCache();
+    }
 }
 
 function resetUI() {
