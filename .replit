@@ -1,5 +1,5 @@
 entrypoint = "index.html"
-modules = ["web"]
+modules = ["nodejs-20", "web"]
 
 [nix]
 channel = "stable-24_11"
@@ -33,11 +33,7 @@ mode = "sequential"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "npm install"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "npm start"
+args = "node server.js"
 
 [[ports]]
 localPort = 80
