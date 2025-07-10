@@ -132,22 +132,22 @@ app.post('/api/generate-tour', async (req, res) => {
   }
 });
 
-// Generate speech using Google Cloud TTS
+// Generate speech using Google Cloud TTS REST API
 app.post('/api/generate-speech', async (req, res) => {
   try {
+    if (!fetch) {
+      return res.status(503).json({ error: 'Server still initializing, please try again' });
+    }
+
     const { text, language = 'en', languageRegion = 'US' } = req.body;
     
     if (!text) {
       return res.status(400).json({ error: 'Text is required' });
     }
 
-    if (!ttsClient) {
-      return res.status(500).json({ error: 'TTS client not properly initialized' });
-    }
-
     const languageCode = `${language}-${languageRegion}`;
     
-    const request = {
+    const requestBody = {
       input: { text },
       voice: { 
         languageCode,
@@ -160,15 +160,31 @@ app.post('/api/generate-speech', async (req, res) => {
       },
     };
 
-    const [response] = await ttsClient.synthesizeSpeech(request);
+    const response = await fetch(`https://texttospeech.googleapis.com/v1/text:synthesize?key=${GOOGLE_TTS_KEY}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Referer': 'https://aitours.top'
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('TTS API Error:', response.status, errorText);
+      throw new Error(`TTS API Error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const audioContent = Buffer.from(data.audioContent, 'base64');
     
     res.set({
       'Content-Type': 'audio/mpeg',
-      'Content-Length': response.audioContent.length,
+      'Content-Length': audioContent.length,
       'Cache-Control': 'public, max-age=3600'
     });
     
-    res.send(response.audioContent);
+    res.send(audioContent);
 
   } catch (error) {
     console.error('Error generating speech:', error);
@@ -186,7 +202,11 @@ app.get('/api/images/:query', async (req, res) => {
     const { query } = req.params;
     const url = `${CUSTOM_SEARCH_API_URL}?key=${GOOGLE_API_KEY}&cx=${CUSTOM_SEARCH_ENGINE_ID}&q=${encodeURIComponent(query)}&searchType=image&num=8`;
     
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      headers: {
+        'Referer': 'https://aitours.top'
+      }
+    });
     if (!response.ok) throw new Error('Image search failed');
     
     const data = await response.json();
@@ -209,7 +229,11 @@ app.get('/api/videos/:query', async (req, res) => {
     const { query } = req.params;
     const url = `${YOUTUBE_API_URL}?key=${GOOGLE_API_KEY}&part=snippet&q=${encodeURIComponent(query + " tour")}&type=video&maxResults=4&videoEmbeddable=true`;
     
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      headers: {
+        'Referer': 'https://aitours.top'
+      }
+    });
     if (!response.ok) throw new Error('YouTube search failed');
     
     const data = await response.json();
