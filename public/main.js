@@ -1826,39 +1826,7 @@ async function demoteAdmin(userId, userName) {
     }
 }
 
-async function promoteToMasterAdmin(userId, userName) {
-    if (!currentChatroomId) return;
-    
-    const user = authService.getCurrentUser();
-    if (!user) return;
-    
-    if (confirm(`Make ${userName} a MASTER ADMIN of this chatroom? This gives them full control over all admins and settings.`)) {
-        try {
-            await chatroomService.addMasterAdmin(currentChatroomId, userId, user);
-            showToast(`${userName} is now a master admin`, 'success');
-        } catch (error) {
-            console.error('Error promoting user:', error);
-            showToast('Failed to promote user', 'error');
-        }
-    }
-}
 
-async function demoteMasterAdmin(userId, userName) {
-    if (!currentChatroomId) return;
-    
-    const user = authService.getCurrentUser();
-    if (!user) return;
-    
-    if (confirm(`Remove ${userName} as master admin?`)) {
-        try {
-            await chatroomService.removeMasterAdmin(currentChatroomId, userId, user);
-            showToast(`${userName} is no longer a master admin`, 'success');
-        } catch (error) {
-            console.error('Error demoting user:', error);
-            showToast('Failed to demote user', 'error');
-        }
-    }
-}
 
 // Close modal when clicking outside
 chatroomModal.addEventListener('click', (e) => {
