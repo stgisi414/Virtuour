@@ -216,13 +216,19 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
     
-    <script type="module" src="main.js"></script>
-
     <script>
         function initMap() {
-            window.initializeTourApp();
+            // Wait for main.js to load before calling initializeTourApp
+            if (window.initializeTourApp) {
+                window.initializeTourApp();
+            } else {
+                // Retry after a short delay if not loaded yet
+                setTimeout(initMap, 100);
+            }
         }
     </script>
+
+    <script type="module" src="main.js"></script>
 
     <script async
         src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCYxnWpHNlzAz5h2W3pGTaW_oIP1ukTs1Y&callback=initMap&libraries=places">
