@@ -2,13 +2,44 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow authenticated users to read and write chatrooms
+    // Chatroom rules
     match /chatrooms/{chatroomId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null && 
+        (
+          // Allow admins to update chatroom settings
+          request.auth.uid in resource.data.admins ||
+          // Allow adding message count updates
+          (resource.data.keys().hasAll(['messageCount']) && 
+           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['messageCount', 'lastMessageAt']))
+        );
       
-      // Allow authenticated users to read and write messages in chatrooms
+      // Message rules
       match /messages/{messageId} {
-        allow read, write: if request.auth != null;
+        allow read: if request.auth != null && 
+          // Check if user is not banned
+          !(request.auth.uid in get(/databases/$(database)/documents/chatrooms/$(chatroomId)).data.bannedUsers) &&
+          // Check message hasn't expired
+          resource.data.expiresAt > request.time;
+          
+        allow create: if request.auth != null && 
+          // Check if user is not banned
+          !(request.auth.uid in get(/databases/$(database)/documents/chatrooms/$(chatroomId)).data.bannedUsers) &&
+          // User can only create messages with their own userId
+          request.resource.data.userId == request.auth.uid &&
+          // Message must have expiry time
+          request.resource.data.keys().hasAll(['expiresAt']) &&
+          // Expiry time must be within 48 hours
+          request.resource.data.expiresAt <= request.time + duration.value(48, 'h');
+          
+        allow delete: if request.auth != null && 
+          (
+            // Message author can delete their own message
+            resource.data.userId == request.auth.uid ||
+            // Admins can delete any message
+            request.auth.uid in get(/databases/$(database)/documents/chatrooms/$(chatroomId)).data.admins
+          );
       }
     }
   }

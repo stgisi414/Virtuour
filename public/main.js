@@ -1385,22 +1385,41 @@ async function openAreaChat() {
         // Setup chatroom
         await chatroomService.getChatroom(chatroomId, currentStop.locationName);
         
+        // Get chatroom data to check admin status
+        const chatroomData = await chatroomService.getChatroomData(chatroomId);
+        
         // Setup message input if user is authenticated
-        setupMessageInput(user);
+        setupMessageInput(user, chatroomData);
         
         // Subscribe to messages
-        chatroomService.subscribeToMessages(chatroomId, displayMessages);
+        chatroomService.subscribeToMessages(chatroomId, (messages) => {
+            displayMessages(messages, chatroomData, user);
+        });
         
         showToast(`Joined ${currentStop.locationName} chat`, 'success');
         
     } catch (error) {
         console.error('Error opening area chat:', error);
-        showToast('Failed to open area chat', 'error');
+        if (error.message.includes('banned')) {
+            showToast('You are banned from this chatroom', 'error');
+        } else {
+            showToast('Failed to open area chat', 'error');
+        }
     }
 }
 
-function setupMessageInput(user) {
+function setupMessageInput(user, chatroomData) {
     authRequiredMessage.classList.add('hidden');
+    
+    // Check if user is banned
+    if (chatroomService.isBanned(chatroomData, user.uid)) {
+        const bannedMessage = document.createElement('div');
+        bannedMessage.className = 'text-red-400 text-center py-4';
+        bannedMessage.textContent = 'You are banned from this chatroom';
+        chatroomInputSection.innerHTML = '';
+        chatroomInputSection.appendChild(bannedMessage);
+        return;
+    }
     
     // Create message input if it doesn't exist
     if (!messageInput) {
@@ -1419,6 +1438,14 @@ function setupMessageInput(user) {
         inputContainer.appendChild(messageInput);
         inputContainer.appendChild(sendButton);
         chatroomInputSection.appendChild(inputContainer);
+        
+        // Add admin controls if user is admin
+        if (chatroomService.isAdmin(chatroomData, user.uid)) {
+            const adminNotice = document.createElement('div');
+            adminNotice.className = 'text-yellow-400 text-xs mb-2 text-center';
+            adminNotice.textContent = '👑 You are an admin of this chatroom';
+            chatroomInputSection.insertBefore(adminNotice, inputContainer);
+        }
         
         // Event listeners
         sendButton.addEventListener('click', sendMessage);
@@ -1451,7 +1478,7 @@ async function sendMessage() {
     }
 }
 
-function displayMessages(messages) {
+function displayMessages(messages, chatroomData, currentUser) {
     chatroomMessages.innerHTML = '';
     
     if (messages.length === 0) {
@@ -1462,9 +1489,11 @@ function displayMessages(messages) {
         return;
     }
     
+    const isCurrentUserAdmin = chatroomService.isAdmin(chatroomData, currentUser.uid);
+    
     messages.forEach(message => {
         const messageDiv = document.createElement('div');
-        messageDiv.className = 'flex items-start gap-3 p-2 hover:bg-slate-800 rounded';
+        messageDiv.className = 'flex items-start gap-3 p-2 hover:bg-slate-800 rounded group';
         
         const avatar = document.createElement('img');
         avatar.src = message.userPhoto || 'https://via.placeholder.com/32';
@@ -1481,11 +1510,30 @@ function displayMessages(messages) {
         userName.className = 'font-semibold text-cyan-400 text-sm';
         userName.textContent = message.userName;
         
+        // Add admin badge if user is admin
+        if (chatroomService.isAdmin(chatroomData, message.userId)) {
+            const adminBadge = document.createElement('span');
+            adminBadge.className = 'text-xs bg-yellow-500 text-black px-1 rounded';
+            adminBadge.textContent = '👑';
+            adminBadge.title = 'Admin';
+            header.appendChild(adminBadge);
+        }
+        
         const timestamp = document.createElement('span');
         timestamp.className = 'text-xs text-gray-500';
         if (message.timestamp) {
             const date = message.timestamp.toDate ? message.timestamp.toDate() : new Date(message.timestamp);
             timestamp.textContent = date.toLocaleTimeString();
+        }
+        
+        // Add expiry info
+        if (message.expiresAt) {
+            const expiryDate = message.expiresAt.toDate ? message.expiresAt.toDate() : new Date(message.expiresAt);
+            const timeLeft = Math.max(0, Math.floor((expiryDate.getTime() - new Date().getTime()) / (1000 * 60 * 60)));
+            const expirySpan = document.createElement('span');
+            expirySpan.className = 'text-xs text-gray-600';
+            expirySpan.textContent = `(${timeLeft}h left)`;
+            timestamp.appendChild(expirySpan);
         }
         
         const messageText = document.createElement('div');
@@ -1499,6 +1547,53 @@ function displayMessages(messages) {
         
         messageDiv.appendChild(avatar);
         messageDiv.appendChild(content);
+        
+        // Add admin controls if current user is admin
+        if (isCurrentUserAdmin && message.userId !== currentUser.uid) {
+            const adminControls = document.createElement('div');
+            adminControls.className = 'hidden group-hover:flex flex-col gap-1 ml-2';
+            
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'text-xs bg-red-600 hover:bg-red-500 text-white px-2 py-1 rounded';
+            deleteBtn.textContent = '🗑️';
+            deleteBtn.title = 'Delete message';
+            deleteBtn.onclick = () => deleteMessage(message.id);
+            
+            const banBtn = document.createElement('button');
+            banBtn.className = 'text-xs bg-red-800 hover:bg-red-700 text-white px-2 py-1 rounded';
+            banBtn.textContent = '🚫';
+            banBtn.title = 'Ban user';
+            banBtn.onclick = () => banUser(message.userId, message.userName);
+            
+            const kickBtn = document.createElement('button');
+            kickBtn.className = 'text-xs bg-orange-600 hover:bg-orange-500 text-white px-2 py-1 rounded';
+            kickBtn.textContent = '👢';
+            kickBtn.title = 'Kick user (10 min)';
+            kickBtn.onclick = () => kickUser(message.userId, message.userName);
+            
+            if (!chatroomService.isAdmin(chatroomData, message.userId)) {
+                const promoteBtn = document.createElement('button');
+                promoteBtn.className = 'text-xs bg-yellow-600 hover:bg-yellow-500 text-white px-2 py-1 rounded';
+                promoteBtn.textContent = '👑';
+                promoteBtn.title = 'Make admin';
+                promoteBtn.onclick = () => promoteToAdmin(message.userId, message.userName);
+                adminControls.appendChild(promoteBtn);
+            } else {
+                const demoteBtn = document.createElement('button');
+                demoteBtn.className = 'text-xs bg-gray-600 hover:bg-gray-500 text-white px-2 py-1 rounded';
+                demoteBtn.textContent = '📉';
+                demoteBtn.title = 'Remove admin';
+                demoteBtn.onclick = () => demoteAdmin(message.userId, message.userName);
+                adminControls.appendChild(demoteBtn);
+            }
+            
+            adminControls.appendChild(deleteBtn);
+            adminControls.appendChild(banBtn);
+            adminControls.appendChild(kickBtn);
+            
+            messageDiv.appendChild(adminControls);
+        }
+        
         chatroomMessages.appendChild(messageDiv);
     });
     
@@ -1521,6 +1616,90 @@ function closeChatroom() {
 // Event listeners
 areaChatButton.addEventListener('click', openAreaChat);
 closeChatroomButton.addEventListener('click', closeChatroom);
+
+// Admin action functions
+async function deleteMessage(messageId) {
+    if (!currentChatroomId) return;
+    
+    const user = authService.getCurrentUser();
+    if (!user) return;
+    
+    try {
+        await chatroomService.deleteMessage(currentChatroomId, messageId, user);
+        showToast('Message deleted', 'success');
+    } catch (error) {
+        console.error('Error deleting message:', error);
+        showToast('Failed to delete message', 'error');
+    }
+}
+
+async function banUser(userId, userName) {
+    if (!currentChatroomId) return;
+    
+    const user = authService.getCurrentUser();
+    if (!user) return;
+    
+    if (confirm(`Ban ${userName} from this chatroom?`)) {
+        try {
+            await chatroomService.banUser(currentChatroomId, userId, user);
+            showToast(`${userName} has been banned`, 'success');
+        } catch (error) {
+            console.error('Error banning user:', error);
+            showToast('Failed to ban user', 'error');
+        }
+    }
+}
+
+async function kickUser(userId, userName) {
+    if (!currentChatroomId) return;
+    
+    const user = authService.getCurrentUser();
+    if (!user) return;
+    
+    if (confirm(`Kick ${userName} for 10 minutes?`)) {
+        try {
+            await chatroomService.kickUser(currentChatroomId, userId, user);
+            showToast(`${userName} has been kicked for 10 minutes`, 'success');
+        } catch (error) {
+            console.error('Error kicking user:', error);
+            showToast('Failed to kick user', 'error');
+        }
+    }
+}
+
+async function promoteToAdmin(userId, userName) {
+    if (!currentChatroomId) return;
+    
+    const user = authService.getCurrentUser();
+    if (!user) return;
+    
+    if (confirm(`Make ${userName} an admin of this chatroom?`)) {
+        try {
+            await chatroomService.promoteToAdmin(currentChatroomId, userId, user);
+            showToast(`${userName} is now an admin`, 'success');
+        } catch (error) {
+            console.error('Error promoting user:', error);
+            showToast('Failed to promote user', 'error');
+        }
+    }
+}
+
+async function demoteAdmin(userId, userName) {
+    if (!currentChatroomId) return;
+    
+    const user = authService.getCurrentUser();
+    if (!user) return;
+    
+    if (confirm(`Remove ${userName} as admin?`)) {
+        try {
+            await chatroomService.demoteAdmin(currentChatroomId, userId, user);
+            showToast(`${userName} is no longer an admin`, 'success');
+        } catch (error) {
+            console.error('Error demoting user:', error);
+            showToast('Failed to demote user', 'error');
+        }
+    }
+}
 
 // Close modal when clicking outside
 chatroomModal.addEventListener('click', (e) => {
