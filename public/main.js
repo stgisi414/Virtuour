@@ -1019,7 +1019,6 @@ async function showFinalGallery(destination) {
         setLoading(false);
         galleryTitle.textContent = `Tour Complete: ${destination}`;
         galleryGrid.innerHTML = '<p class="text-slate-400 col-span-full text-center">Gallery content unavailable</p>';
-```text
         toggleVisibility(galleryContainer, true);
     }
 }
