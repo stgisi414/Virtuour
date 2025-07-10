@@ -220,7 +220,6 @@ window.initializeTourApp = () => {
         generateTourButton.disabled = false;
         generateTourButton.textContent = 'Generate Tour';
         
-        // Setup state machine listeners
         setupStateMachineListeners();
         
         console.log('Tour app initialized successfully');
@@ -256,7 +255,7 @@ function updateUIForState(state) {
     }
 }
 
-// --- 7. LOCATION PROCESSING (Same as before) ---
+// --- 7. OPTIMIZED LOCATION PROCESSING ---
 class LocationProcessor {
     constructor(geocoder, streetViewService) {
         this.geocoder = geocoder;
@@ -531,9 +530,7 @@ async function processItinerary(rawItinerary, cityName) {
                 
                 return {
                     ...locationData,
-                    briefDescription: stop.briefDescription,
-                    language: stop.language || 'en',
-                    languageRegion: stop.languageRegion || 'US'
+                    briefDescription: stop.briefDescription
                 };
             } catch (error) {
                 console.warn(`✗ Failed: ${stop.locationName} - ${error.message}`);
@@ -558,7 +555,7 @@ async function processItinerary(rawItinerary, cityName) {
     return processedStops;
 }
 
-// --- 9. TOUR EXECUTION ---
+// --- 9. TOUR EXECUTION WITH STATE MACHINE ---
 function startTourSequence() {
     currentStopIndex = 0;
     tourState.start();
@@ -632,54 +629,72 @@ async function speakLocationDescription(location) {
     try {
         const text = `Welcome to ${location.locationName}. ${location.briefDescription}. You can explore this area or continue to the next location.`;
         
+        // Try Google Cloud TTS first
         const response = await fetch(`${API_BASE_URL}/api/generate-speech`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                text: text,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                text,
                 language: location.language || 'en',
                 languageRegion: location.languageRegion || 'US'
             })
         });
-
-        if (!response.ok) {
-            throw new Error('Failed to generate speech');
-        }
-
-        const audioBlob = await response.blob();
-        const audioUrl = URL.createObjectURL(audioBlob);
         
-        currentAudio = new Audio(audioUrl);
-        
-        currentAudio.onended = () => {
-            toggleVisibility(tourInfoContainer, false);
-            URL.revokeObjectURL(audioUrl);
-            currentAudio = null;
-        };
-        
-        currentAudio.onerror = () => {
-            toggleVisibility(tourInfoContainer, false);
-            URL.revokeObjectURL(audioUrl);
-            currentAudio = null;
-        };
-        
-        await currentAudio.play();
-        
-        tourState.setTimeout(() => {
-            if (currentAudio) {
-                currentAudio.pause();
+        if (response.ok) {
+            const audioBlob = await response.blob();
+            const audioUrl = URL.createObjectURL(audioBlob);
+            
+            currentAudio = new Audio(audioUrl);
+            currentAudio.onended = () => {
                 toggleVisibility(tourInfoContainer, false);
                 URL.revokeObjectURL(audioUrl);
                 currentAudio = null;
-            }
-        }, 15000);
-        
+            };
+            currentAudio.onerror = () => {
+                toggleVisibility(tourInfoContainer, false);
+                URL.revokeObjectURL(audioUrl);
+                currentAudio = null;
+                fallbackToWebSpeech(text);
+            };
+            
+            currentAudio.play();
+            
+            tourState.setTimeout(() => {
+                if (currentAudio) {
+                    stopAudio();
+                    toggleVisibility(tourInfoContainer, false);
+                }
+            }, 15000);
+        } else {
+            throw new Error('TTS service unavailable');
+        }
     } catch (error) {
-        console.error('Error generating speech:', error);
-        showToast('Using fallback audio', 'info');
+        console.warn('Google TTS failed, falling back to Web Speech API:', error);
+        fallbackToWebSpeech(text);
+    }
+}
+
+function fallbackToWebSpeech(text) {
+    if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 0.9;
+        utterance.pitch = 1.1;
         
+        utterance.onend = () => {
+            toggleVisibility(tourInfoContainer, false);
+        };
+        
+        utterance.onerror = () => {
+            toggleVisibility(tourInfoContainer, false);
+        };
+        
+        speechSynthesis.speak(utterance);
+        
+        tourState.setTimeout(() => {
+            speechSynthesis.cancel();
+            toggleVisibility(tourInfoContainer, false);
+        }, 15000);
+    } else {
         tourState.setTimeout(() => {
             toggleVisibility(tourInfoContainer, false);
         }, 5000);
@@ -996,14 +1011,12 @@ function positionControls() {
     }
 }
 
-// --- 14. API FUNCTIONS ---
+// --- 14. ITINERARY FETCHING ---
 async function fetchItinerary(destination, focus) {
     try {
         const response = await fetch(`${API_BASE_URL}/api/generate-tour`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 destination: destination,
                 focus: focus
@@ -1028,6 +1041,7 @@ async function fetchItinerary(destination, focus) {
     }
 }
 
+// --- 15. GALLERY FUNCTIONS ---
 async function showFinalGallery(destination) {
     hideAllTourUI();
     
@@ -1095,7 +1109,7 @@ async function fetchImages(query) {
 async function fetchVideos(query) {
     try {
         const response = await fetch(`${API_BASE_URL}/api/videos/${encodeURIComponent(query)}`);
-        if (!response.ok) throw new Error('Video search failed');
+        if (!response.ok) throw new Error('YouTube search failed');
         return await response.json();
     } catch (error) {
         return [];
@@ -1185,7 +1199,7 @@ function updateLocalTime(element) {
     }, 1000);
 }
 
-// --- 15. EVENT LISTENERS ---
+// --- 16. EVENT LISTENERS ---
 generateTourButton.addEventListener('click', generateTour);
 endTourButton.addEventListener('click', resetToMainMenu);
 pauseTourButton.addEventListener('click', togglePause);
