@@ -199,7 +199,7 @@ function stopAudio() {
 }
 
 // --- 6. INITIALIZATION ---
-window.initializeTourApp = () => {
+function initializeTourApp() {
     try {
         streetView = new google.maps.StreetViewPanorama(streetviewContainer, {
             position: { lat: 40.7291, lng: -73.9965 },
@@ -228,7 +228,10 @@ window.initializeTourApp = () => {
         console.error('Initialization failed:', error);
         showToast('Failed to initialize Google Maps. Please refresh the page.', 'error');
     }
-};
+}
+
+// Make it available globally for Google Maps callback
+window.initializeTourApp = initializeTourApp;
 
 function setupStateMachineListeners() {
     tourState.on('stateChange', ({ from, to }) => {
