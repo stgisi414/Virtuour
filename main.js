@@ -11,15 +11,27 @@ const CUSTOM_SEARCH_API_URL = 'https://www.googleapis.com/customsearch/v1';
 import AuthService from './auth-service.js';
 import ChatroomService from './chatroom-service.js';
 
+// Add direct Firebase logging to main.js
+console.log('🚀 MAIN.JS: Loading Firebase modules...');
+console.log('🚀 MAIN.JS: About to import AuthService...');
+console.log('🚀 MAIN.JS: About to import ChatroomService...');
+
 // Global user state
 let currentUser = null;
 
 // Initialize Firebase Auth when the page loads
 console.log('🚀 MAIN.JS: Starting Firebase initialization...');
+console.log('🚀 MAIN.JS: Document ready state:', document.readyState);
+console.log('🚀 MAIN.JS: AuthService available:', typeof AuthService);
+console.log('🚀 MAIN.JS: ChatroomService available:', typeof ChatroomService);
+
 document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 MAIN.JS: DOM loaded, initializing Firebase auth...');
+    console.log('🚀 MAIN.JS: About to call initializeAuth()...');
     initializeAuth();
+    console.log('🚀 MAIN.JS: About to call initializeChatroom()...');
     initializeChatroom();
+    console.log('🚀 MAIN.JS: Firebase initialization calls completed');
 });
 
 // Also initialize if DOM is already loaded
@@ -27,8 +39,11 @@ if (document.readyState === 'loading') {
     console.log('🚀 MAIN.JS: DOM still loading, waiting for DOMContentLoaded...');
 } else {
     console.log('🚀 MAIN.JS: DOM already loaded, initializing Firebase auth immediately...');
+    console.log('🚀 MAIN.JS: About to call initializeAuth()...');
     initializeAuth();
+    console.log('🚀 MAIN.JS: About to call initializeChatroom()...');
     initializeChatroom();
+    console.log('🚀 MAIN.JS: Firebase initialization calls completed');
 }
 
 // --- 2. DOM ELEMENT REFERENCES ---
