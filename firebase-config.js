@@ -48,6 +48,37 @@ try {
   console.log('🔥 FIREBASE CONFIG: Analytics not available:', error);
 }
 
+// Export Firebase Auth functions
+export { 
+  signInWithPopup, 
+  GoogleAuthProvider, 
+  signOut, 
+  onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword 
+} from 'firebase/auth';
+
+// Export Firestore functions
+export { 
+  collection, 
+  addDoc, 
+  query, 
+  where, 
+  orderBy, 
+  limit,
+  onSnapshot,
+  serverTimestamp,
+  doc,
+  setDoc,
+  getDoc,
+  getDocs,
+  updateDoc,
+  deleteDoc,
+  arrayUnion,
+  arrayRemove,
+  Timestamp
+} from 'firebase/firestore';
+
 console.log('🔥 FIREBASE CONFIG: All Firebase services initialized successfully');
 
 export { analytics };
