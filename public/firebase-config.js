@@ -1,10 +1,30 @@
 
 // Firebase configuration
-import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
-import { getAnalytics } from 'firebase/analytics';
+import { 
+  signInWithPopup, 
+  GoogleAuthProvider, 
+  signOut, 
+  onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword 
+} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js';
+
+import {
+  collection, 
+  addDoc, 
+  query, 
+  where, 
+  orderBy, 
+  limit,
+  onSnapshot,
+  serverTimestamp,
+  doc,
+  setDoc,
+  getDoc,
+  getDocs
+} from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
+
+console.log('🔥 FIREBASE CONFIG: Starting Firebase configuration...');
 
 const firebaseConfig = {
   apiKey: "AIzaSyCTSCuEWDCg5hlMIUra9Zl89dbz4_vSc7Y",
@@ -16,21 +36,48 @@ const firebaseConfig = {
   measurementId: "G-955N78GH31"
 };
 
+console.log('🔥 FIREBASE CONFIG: Config object created:', firebaseConfig);
+
 // Initialize Firebase
-const app = initializeApp(firebaseConfig);
+console.log('🔥 FIREBASE CONFIG: Initializing Firebase app...');
+const app = window.firebase.initializeApp(firebaseConfig);
+console.log('🔥 FIREBASE CONFIG: Firebase app initialized:', app);
 
 // Initialize Firebase services
-export const auth = getAuth(app);
-export const db = getFirestore(app);
-export const storage = getStorage(app);
+console.log('🔥 FIREBASE CONFIG: Initializing Auth...');
+export const auth = window.firebase.getAuth(app);
+console.log('🔥 FIREBASE CONFIG: Auth initialized:', auth);
 
-// Initialize analytics only if supported
-let analytics = null;
-try {
-  analytics = getAnalytics(app);
-} catch (error) {
-  console.log('Analytics not available:', error);
-}
+console.log('🔥 FIREBASE CONFIG: Initializing Firestore...');
+export const db = window.firebase.getFirestore(app);
+console.log('🔥 FIREBASE CONFIG: Firestore initialized:', db);
 
-export { analytics };
+console.log('🔥 FIREBASE CONFIG: Initializing Storage...');
+export const storage = window.firebase.getStorage(app);
+console.log('🔥 FIREBASE CONFIG: Storage initialized:', storage);
+
+// Export Firebase functions for use in other modules
+export {
+  signInWithPopup,
+  GoogleAuthProvider,
+  signOut,
+  onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  collection,
+  addDoc,
+  query,
+  where,
+  orderBy,
+  limit,
+  onSnapshot,
+  serverTimestamp,
+  doc,
+  setDoc,
+  getDoc,
+  getDocs
+};
+
+console.log('🔥 FIREBASE CONFIG: All Firebase services initialized successfully');
+
 export default app;
