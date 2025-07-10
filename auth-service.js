@@ -7,7 +7,7 @@ import {
   onAuthStateChanged,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword 
-} from 'firebase/auth';
+} from './firebase-config.js';
 
 console.log('🔑 AUTH SERVICE: Starting AuthService import...');
 console.log('🔑 AUTH SERVICE: Auth object from firebase-config:', auth);
