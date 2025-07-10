@@ -1408,17 +1408,52 @@ async function getProperDestinationName(userInput) {
 
         const result = geocodeResults[0];
         
-        // Extract the city name from address components
-        let cityName = '';
-        let countryName = '';
+        // Check if the user input appears in the formatted address
+        // If so, try to preserve the specific area name they requested
+        const userInputLower = userInput.toLowerCase().trim();
+        const formattedAddressLower = result.formatted_address.toLowerCase();
         
+        // Look for specific area/district/neighborhood types first
+        let specificAreaName = '';
+        for (const component of result.address_components) {
+            const componentName = component.long_name.toLowerCase();
+            const componentTypes = component.types;
+            
+            // Check if this component matches the user input and is a specific area
+            if (componentName.includes(userInputLower) || userInputLower.includes(componentName)) {
+                if (componentTypes.includes('sublocality') || 
+                    componentTypes.includes('sublocality_level_1') ||
+                    componentTypes.includes('neighborhood') ||
+                    componentTypes.includes('route') ||
+                    componentTypes.includes('establishment') ||
+                    componentTypes.includes('point_of_interest')) {
+                    specificAreaName = component.long_name;
+                    break;
+                }
+            }
+        }
+        
+        // If we found a specific area name, use it
+        if (specificAreaName) {
+            return specificAreaName;
+        }
+        
+        // If the user input is contained in the formatted address, try to preserve it
+        if (formattedAddressLower.includes(userInputLower)) {
+            // Capitalize the user input properly
+            return userInput.trim().split(' ')
+                .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+                .join(' ');
+        }
+        
+        // Fallback to extracting from address components
+        let cityName = '';
         for (const component of result.address_components) {
             if (component.types.includes('locality')) {
                 cityName = component.long_name;
+                break;
             } else if (component.types.includes('administrative_area_level_1') && !cityName) {
                 cityName = component.long_name;
-            } else if (component.types.includes('country')) {
-                countryName = component.long_name;
             }
         }
 
