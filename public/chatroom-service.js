@@ -26,23 +26,54 @@ class ChatroomService {
 
   async getChatroom(areaId, areaName, currentUser = null) {
     try {
-      const chatroomRef = doc(db, 'chatrooms', areaId);
+      // Validate areaId to prevent abuse
+      if (!areaId || typeof areaId !== 'string') {
+        throw new Error('Invalid area ID');
+      }
+      
+      // Sanitize areaId - only allow alphanumeric, hyphens, underscores
+      const sanitizedAreaId = areaId.replace(/[^a-zA-Z0-9_-]/g, '').substring(0, 50);
+      if (sanitizedAreaId.length < 3) {
+        throw new Error('Area ID too short after sanitization');
+      }
+      
+      // Validate area name
+      if (!areaName || typeof areaName !== 'string' || areaName.length < 2 || areaName.length > 100) {
+        throw new Error('Invalid area name');
+      }
+
+      const chatroomRef = doc(db, 'chatrooms', sanitizedAreaId);
       const chatroomDoc = await getDoc(chatroomRef);
 
       if (!chatroomDoc.exists()) {
-        // Create new chatroom with the first user as admin
-        const initialAdmins = currentUser ? [currentUser.uid] : [];
+        if (!currentUser) {
+          throw new Error('Must be authenticated to create chatroom');
+        }
+
+        // Rate limiting check - prevent user from creating too many chatrooms
+        const userChatroomsQuery = query(
+          collection(db, 'chatrooms'),
+          where('createdBy', '==', currentUser.uid)
+        );
+        const userChatrooms = await getDocs(userChatroomsQuery);
+        
+        if (userChatrooms.size >= 10) { // Limit to 10 chatrooms per user
+          throw new Error('You have reached the maximum number of chatrooms you can create');
+        }
+
+        // Create new chatroom with strict validation
+        const initialAdmins = [currentUser.uid];
         await setDoc(chatroomRef, {
-          areaId: areaId,
-          areaName: areaName,
+          areaId: sanitizedAreaId,
+          areaName: areaName.trim(),
           createdAt: serverTimestamp(),
           lastActivityAt: serverTimestamp(),
           messageCount: 0,
-          admins: initialAdmins, // First user becomes admin
-          masterAdmins: [], // Array of master admin user IDs
-          bannedUsers: [], // Array of user IDs who are banned
-          moderators: [], // Array of user IDs who are moderators
-          createdBy: currentUser ? currentUser.uid : null
+          admins: initialAdmins,
+          masterAdmins: [], // Will be set by Cloud Function
+          bannedUsers: [],
+          moderators: [],
+          createdBy: currentUser.uid
         });
       } else {
         // Update last activity when someone joins

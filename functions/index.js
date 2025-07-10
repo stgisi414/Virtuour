@@ -182,24 +182,51 @@ async function cleanupEmptyChatrooms(chatroomIds) {
   }
 }
 
-// Function to promote first user to master admin when they create a chatroom
-exports.assignMasterAdmin = functions.firestore
+// Function to validate and set up new chatrooms
+exports.validateAndSetupChatroom = functions.firestore
   .document('chatrooms/{chatroomId}')
   .onCreate(async (snap, context) => {
     const data = snap.data();
     const chatroomId = context.params.chatroomId;
     
-    // If there's a creator and no master admins, make them a master admin
-    if (data.createdBy && (!data.masterAdmins || data.masterAdmins.length === 0)) {
-      try {
-        await snap.ref.update({
-          masterAdmins: [data.createdBy],
-          admins: admin.firestore.FieldValue.arrayUnion(data.createdBy)
-        });
-        
-        console.log(`Made user ${data.createdBy} a master admin of chatroom ${chatroomId}`);
-      } catch (error) {
-        console.error(`Error assigning master admin to chatroom ${chatroomId}:`, error);
+    try {
+      // Additional server-side validation
+      if (!data.createdBy || !data.areaId || !data.areaName) {
+        console.error(`Invalid chatroom data for ${chatroomId}:`, data);
+        await snap.ref.delete();
+        return;
       }
+
+      // Validate areaId format
+      if (!/^[a-zA-Z0-9_-]{3,50}$/.test(chatroomId)) {
+        console.error(`Invalid chatroomId format: ${chatroomId}`);
+        await snap.ref.delete();
+        return;
+      }
+
+      // Check if user has created too many chatrooms recently
+      const recentChatrooms = await db.collection('chatrooms')
+        .where('createdBy', '==', data.createdBy)
+        .where('createdAt', '>', admin.firestore.Timestamp.fromDate(new Date(Date.now() - 24 * 60 * 60 * 1000))) // Last 24 hours
+        .get();
+
+      if (recentChatrooms.size > 5) { // Max 5 chatrooms per day
+        console.error(`User ${data.createdBy} exceeded daily chatroom creation limit`);
+        await snap.ref.delete();
+        return;
+      }
+
+      // If validation passes, make creator a master admin
+      await snap.ref.update({
+        masterAdmins: [data.createdBy],
+        admins: admin.firestore.FieldValue.arrayUnion(data.createdBy),
+        validatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      
+      console.log(`Validated and set up chatroom ${chatroomId} for user ${data.createdBy}`);
+    } catch (error) {
+      console.error(`Error validating chatroom ${chatroomId}:`, error);
+      // Delete invalid chatroom
+      await snap.ref.delete();
     }
   });

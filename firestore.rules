@@ -5,8 +5,22 @@ service cloud.firestore {
     match /chatrooms/{chatroomId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null &&
-        request.resource.data.keys().hasAll(['areaId', 'areaName', 'createdAt']) &&
-        request.resource.data.areaId == chatroomId;
+        // Strict validation to prevent abuse
+        request.resource.data.keys().hasAll(['areaId', 'areaName', 'createdAt', 'lastActivityAt', 'messageCount', 'admins', 'masterAdmins', 'bannedUsers', 'moderators', 'createdBy']) &&
+        request.resource.data.areaId == chatroomId &&
+        request.resource.data.createdBy == request.auth.uid &&
+        // Prevent arbitrary chatroom IDs - must match specific pattern
+        chatroomId.matches('^[a-zA-Z0-9_-]{3,50}$') &&
+        // Area name validation
+        request.resource.data.areaName is string &&
+        request.resource.data.areaName.size() >= 2 &&
+        request.resource.data.areaName.size() <= 100 &&
+        // Initialize with safe defaults
+        request.resource.data.messageCount == 0 &&
+        request.resource.data.admins.size() <= 1 &&
+        request.resource.data.masterAdmins.size() == 0 &&
+        request.resource.data.bannedUsers.size() == 0 &&
+        request.resource.data.moderators.size() == 0;
       allow update: if request.auth != null && 
         (
           // Allow updating message count and last message time
