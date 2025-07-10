@@ -14,16 +14,30 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // API Configuration
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyDtLyUB-2wocE-uNG5e3pwNFArjn1GVTco';
+const GOOGLE_TTS_KEY = process.env.GOOGLE_TTS_KEY; // Service account key JSON as string
+const GOOGLE_GEMINI_KEY = process.env.GOOGLE_GEMINI_KEY || 'AIzaSyDtLyUB-2wocE-uNG5e3pwNFArjn1GVTco';
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY || 'AIzaSyCYxnWpHNlzAz5h2W3pGTaW_oIP1ukTs1Y';
 const CUSTOM_SEARCH_ENGINE_ID = process.env.CUSTOM_SEARCH_ENGINE_ID || '16b67ee3373714c2b';
 
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
+const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GOOGLE_GEMINI_KEY}`;
 const YOUTUBE_API_URL = 'https://www.googleapis.com/youtube/v3/search';
 const CUSTOM_SEARCH_API_URL = 'https://www.googleapis.com/customsearch/v1';
 
 // Initialize Google Cloud TTS client
-const ttsClient = new textToSpeech.TextToSpeechClient();
+let ttsClient;
+if (GOOGLE_TTS_KEY) {
+  try {
+    const credentials = JSON.parse(GOOGLE_TTS_KEY);
+    ttsClient = new textToSpeech.TextToSpeechClient({
+      credentials: credentials
+    });
+  } catch (error) {
+    console.error('Error parsing Google TTS credentials:', error);
+    ttsClient = new textToSpeech.TextToSpeechClient(); // Fallback to default
+  }
+} else {
+  ttsClient = new textToSpeech.TextToSpeechClient(); // Use default credentials
+}
 
 // API Routes
 
@@ -98,6 +112,10 @@ app.post('/api/generate-speech', async (req, res) => {
     
     if (!text) {
       return res.status(400).json({ error: 'Text is required' });
+    }
+
+    if (!ttsClient) {
+      return res.status(500).json({ error: 'TTS client not properly initialized' });
     }
 
     const languageCode = `${language}-${languageRegion}`;
