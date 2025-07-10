@@ -1211,4 +1211,131 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
+// --- 17. FIREBASE AUTHENTICATION ---
+import authService from './auth-service.js';
+
+// DOM elements for authentication
+const googleSigninBtn = document.getElementById('google-signin-btn');
+const showEmailAuthBtn = document.getElementById('show-email-auth');
+const emailAuthModal = document.getElementById('email-auth-modal');
+const closeEmailModalBtn = document.getElementById('close-email-modal');
+const emailSigninBtn = document.getElementById('email-signin-btn');
+const emailSignupBtn = document.getElementById('email-signup-btn');
+const emailInput = document.getElementById('email-input');
+const passwordInput = document.getElementById('password-input');
+const logoutBtn = document.getElementById('logout-btn');
+const userInfo = document.getElementById('user-info');
+const authButtons = document.getElementById('auth-buttons');
+const userAvatar = document.getElementById('user-avatar');
+const userName = document.getElementById('user-name');
+
+// Authentication event listeners
+googleSigninBtn.addEventListener('click', async () => {
+    try {
+        await authService.signInWithGoogle();
+        showToast('Successfully signed in with Google!', 'success');
+    } catch (error) {
+        console.error('Google sign-in error:', error);
+        showToast('Failed to sign in with Google', 'error');
+    }
+});
+
+showEmailAuthBtn.addEventListener('click', () => {
+    emailAuthModal.classList.remove('hidden');
+});
+
+closeEmailModalBtn.addEventListener('click', () => {
+    emailAuthModal.classList.add('hidden');
+    emailInput.value = '';
+    passwordInput.value = '';
+});
+
+emailSigninBtn.addEventListener('click', async () => {
+    const email = emailInput.value.trim();
+    const password = passwordInput.value;
+    
+    if (!email || !password) {
+        showToast('Please enter email and password', 'error');
+        return;
+    }
+    
+    try {
+        await authService.signInWithEmail(email, password);
+        showToast('Successfully signed in!', 'success');
+        emailAuthModal.classList.add('hidden');
+        emailInput.value = '';
+        passwordInput.value = '';
+    } catch (error) {
+        console.error('Email sign-in error:', error);
+        showToast('Failed to sign in with email', 'error');
+    }
+});
+
+emailSignupBtn.addEventListener('click', async () => {
+    const email = emailInput.value.trim();
+    const password = passwordInput.value;
+    
+    if (!email || !password) {
+        showToast('Please enter email and password', 'error');
+        return;
+    }
+    
+    if (password.length < 6) {
+        showToast('Password must be at least 6 characters', 'error');
+        return;
+    }
+    
+    try {
+        await authService.signUpWithEmail(email, password);
+        showToast('Account created successfully!', 'success');
+        emailAuthModal.classList.add('hidden');
+        emailInput.value = '';
+        passwordInput.value = '';
+    } catch (error) {
+        console.error('Email sign-up error:', error);
+        showToast('Failed to create account', 'error');
+    }
+});
+
+logoutBtn.addEventListener('click', async () => {
+    try {
+        await authService.signOut();
+        showToast('Signed out successfully', 'success');
+    } catch (error) {
+        console.error('Sign-out error:', error);
+        showToast('Failed to sign out', 'error');
+    }
+});
+
+// Listen for authentication state changes
+authService.onAuthStateChanged((user) => {
+    if (user) {
+        // User is signed in
+        userInfo.classList.remove('hidden');
+        userInfo.classList.add('flex');
+        authButtons.classList.add('hidden');
+        
+        userName.textContent = user.displayName || user.email || 'User';
+        userAvatar.src = user.photoURL || 'https://via.placeholder.com/32';
+        
+        console.log('User signed in:', user);
+    } else {
+        // User is signed out
+        userInfo.classList.add('hidden');
+        userInfo.classList.remove('flex');
+        authButtons.classList.remove('hidden');
+        
+        console.log('User signed out');
+    }
+});
+
+// Close modal when clicking outside
+emailAuthModal.addEventListener('click', (e) => {
+    if (e.target === emailAuthModal) {
+        emailAuthModal.classList.add('hidden');
+        emailInput.value = '';
+        passwordInput.value = '';
+    }
+});
+
 console.log('Tour application with Google Cloud TTS loaded successfully');
