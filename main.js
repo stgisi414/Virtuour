@@ -1286,6 +1286,8 @@ function updateLocalTime(element) {
 
 // --- 16. FIREBASE AUTHENTICATION ---
 function initializeAuth() {
+    console.log('Initializing Firebase Auth...');
+    
     // Header auth elements
     const userInfo = document.getElementById('user-info');
     const authButtons = document.getElementById('auth-buttons');
@@ -1294,6 +1296,13 @@ function initializeAuth() {
     const logoutBtn = document.getElementById('logout-btn');
     const googleSigninBtn = document.getElementById('google-signin-btn');
     const showEmailAuthBtn = document.getElementById('show-email-auth');
+    
+    console.log('Auth elements found:', {
+        userInfo: !!userInfo,
+        authButtons: !!authButtons,
+        googleSigninBtn: !!googleSigninBtn,
+        showEmailAuthBtn: !!showEmailAuthBtn
+    });
     
     // Main page auth elements
     const mainUserInfo = document.getElementById('main-user-info');

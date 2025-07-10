@@ -1,8 +1,8 @@
 
 // Firebase configuration
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getAuth, connectAuthEmulator } from 'firebase/auth';
+import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getAnalytics } from 'firebase/analytics';
 
@@ -23,6 +23,14 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
-export const analytics = getAnalytics(app);
 
+// Initialize analytics only if supported
+let analytics = null;
+try {
+  analytics = getAnalytics(app);
+} catch (error) {
+  console.log('Analytics not available:', error);
+}
+
+export { analytics };
 export default app;

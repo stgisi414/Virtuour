@@ -15,8 +15,11 @@ class AuthService {
     this.currentUser = null;
     this.listeners = [];
     
+    console.log('AuthService initializing...', auth);
+    
     // Listen for auth state changes
     onAuthStateChanged(auth, (user) => {
+      console.log('Auth state changed:', user);
       this.currentUser = user;
       this.listeners.forEach(listener => listener(user));
     });
