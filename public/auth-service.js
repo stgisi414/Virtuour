@@ -1,4 +1,3 @@
-
 import { auth } from './firebase-config.js';
 import { 
   signInWithPopup, 
@@ -18,12 +17,12 @@ class AuthService {
     console.log('🔑 AUTH SERVICE: Creating GoogleAuthProvider...');
     this.provider = new GoogleAuthProvider();
     console.log('🔑 AUTH SERVICE: GoogleAuthProvider created:', this.provider);
-    
+
     this.currentUser = null;
     this.listeners = [];
-    
+
     console.log('🔑 AUTH SERVICE: AuthService initializing with auth object:', auth);
-    
+
     // Listen for auth state changes
     console.log('🔑 AUTH SERVICE: Setting up onAuthStateChanged listener...');
     onAuthStateChanged(auth, (user) => {
