@@ -1356,12 +1356,35 @@ let currentChatroomId = null;
 let messageInput = null;
 let sendButton = null;
 
+// Function to normalize destination for consistent chat room ID
+function normalizeDestinationForChat(destination) {
+    if (!destination) return null;
+    
+    // Convert to lowercase and remove common suffixes
+    let normalized = destination.toLowerCase().trim();
+    
+    // Remove country suffixes
+    normalized = normalized.replace(/,?\s*(south korea|korea|japan|china|usa|united states|uk|united kingdom|france|germany|italy|spain)$/i, '');
+    
+    // Remove state/province suffixes for major cities
+    normalized = normalized.replace(/,?\s*(seoul|tokyo|beijing|new york|california|london|paris|berlin)$/i, '');
+    
+    // Extract the main area name (first part before comma)
+    const parts = normalized.split(',');
+    normalized = parts[0].trim();
+    
+    // Replace spaces with underscores and remove special characters
+    normalized = normalized.replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    
+    return normalized;
+}
+
 // Function to open the chat for the current location
 async function openAreaChat() {
     if (tourState.state !== 'paused' || currentStopIndex >= tourItinerary.length) return;
 
-    const currentStop = tourItinerary[currentStopIndex];
-    const chatroomId = currentStop.placeId;
+    // Use normalized destination instead of individual stop place ID
+    const chatroomId = normalizeDestinationForChat(currentDestination);
 
     if (!chatroomId) {
         showToast('Could not determine the area chat ID.', 'error');
@@ -1376,13 +1399,13 @@ async function openAreaChat() {
 
     try {
         currentChatroomId = chatroomId;
-        chatroomTitle.textContent = `${currentStop.locationName} Chat`;
+        chatroomTitle.textContent = `${currentDestination} Area Chat`;
         
         // Show modal
         chatroomModal.classList.remove('hidden');
         
         // Setup chatroom
-        await chatroomService.getChatroom(chatroomId, currentStop.locationName);
+        await chatroomService.getChatroom(chatroomId, currentDestination);
         
         // Get chatroom data to check admin status
         const chatroomData = await chatroomService.getChatroomData(chatroomId);
@@ -1395,7 +1418,7 @@ async function openAreaChat() {
             displayMessages(messages, chatroomData, user);
         });
         
-        showToast(`Joined ${currentStop.locationName} chat`, 'success');
+        showToast(`Joined ${currentDestination} area chat`, 'success');
         
     } catch (error) {
         console.error('Error opening area chat:', error);
