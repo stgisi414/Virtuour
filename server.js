@@ -3,7 +3,13 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const textToSpeech = require('@google-cloud/text-to-speech');
-const fetch = require('node-fetch');
+
+// Dynamic import for node-fetch (ES module)
+let fetch;
+(async () => {
+  const fetchModule = await import('node-fetch');
+  fetch = fetchModule.default;
+})();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -44,6 +50,10 @@ if (GOOGLE_TTS_KEY) {
 // Generate tour itinerary
 app.post('/api/generate-tour', async (req, res) => {
   try {
+    if (!fetch) {
+      return res.status(503).json({ error: 'Server still initializing, please try again' });
+    }
+
     const { destination, focus } = req.body;
     
     if (!destination || !focus) {
@@ -152,6 +162,10 @@ app.post('/api/generate-speech', async (req, res) => {
 // Fetch images
 app.get('/api/images/:query', async (req, res) => {
   try {
+    if (!fetch) {
+      return res.status(503).json({ error: 'Server still initializing, please try again' });
+    }
+
     const { query } = req.params;
     const url = `${CUSTOM_SEARCH_API_URL}?key=${GOOGLE_API_KEY}&cx=${CUSTOM_SEARCH_ENGINE_ID}&q=${encodeURIComponent(query)}&searchType=image&num=8`;
     
@@ -171,6 +185,10 @@ app.get('/api/images/:query', async (req, res) => {
 // Fetch videos
 app.get('/api/videos/:query', async (req, res) => {
   try {
+    if (!fetch) {
+      return res.status(503).json({ error: 'Server still initializing, please try again' });
+    }
+
     const { query } = req.params;
     const url = `${YOUTUBE_API_URL}?key=${GOOGLE_API_KEY}&part=snippet&q=${encodeURIComponent(query + " tour")}&type=video&maxResults=4&videoEmbeddable=true`;
     
@@ -190,6 +208,10 @@ app.get('/api/videos/:query', async (req, res) => {
 // Fetch local info
 app.get('/api/local-info/:query', async (req, res) => {
   try {
+    if (!fetch) {
+      return res.status(503).json({ error: 'Server still initializing, please try again' });
+    }
+
     const { query } = req.params;
     const prompt = `Provide local information for ${query}. Respond with JSON containing "weather" (object with "temp_c", "temp_f", "condition") and "timezone" (IANA timezone).`;
     
@@ -236,6 +258,10 @@ app.get('/api/local-info/:query', async (req, res) => {
 // Fetch news outlets
 app.get('/api/news/:query', async (req, res) => {
   try {
+    if (!fetch) {
+      return res.status(503).json({ error: 'Server still initializing, please try again' });
+    }
+
     const { query } = req.params;
     const prompt = `List 3-4 major local news outlets for ${query}. Respond with JSON array of objects with "name" and "url" properties.`;
     
