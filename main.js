@@ -1286,6 +1286,7 @@ function updateLocalTime(element) {
 
 // --- 16. FIREBASE AUTHENTICATION ---
 function initializeAuth() {
+    // Header auth elements
     const userInfo = document.getElementById('user-info');
     const authButtons = document.getElementById('auth-buttons');
     const userAvatar = document.getElementById('user-avatar');
@@ -1293,6 +1294,17 @@ function initializeAuth() {
     const logoutBtn = document.getElementById('logout-btn');
     const googleSigninBtn = document.getElementById('google-signin-btn');
     const showEmailAuthBtn = document.getElementById('show-email-auth');
+    
+    // Main page auth elements
+    const mainUserInfo = document.getElementById('main-user-info');
+    const mainAuthButtons = document.getElementById('main-auth-buttons');
+    const mainUserAvatar = document.getElementById('main-user-avatar');
+    const mainUserName = document.getElementById('main-user-name');
+    const mainLogoutBtn = document.getElementById('main-logout-btn');
+    const mainGoogleSigninBtn = document.getElementById('main-google-signin-btn');
+    const mainShowEmailAuthBtn = document.getElementById('main-show-email-auth');
+    
+    const chatLoginIndicator = document.getElementById('chat-login-indicator');
     const emailAuthModal = document.getElementById('email-auth-modal');
     const closeEmailModal = document.getElementById('close-email-modal');
     const emailSigninBtn = document.getElementById('email-signin-btn');
@@ -1304,16 +1316,43 @@ function initializeAuth() {
     AuthService.onAuthStateChanged((user) => {
         currentUser = user;
         if (user) {
-            // User is signed in
+            // User is signed in - update header
             userAvatar.src = user.photoURL || 'https://via.placeholder.com/32';
             userName.textContent = user.displayName || user.email;
             userInfo.classList.remove('hidden');
+            userInfo.classList.add('flex');
             authButtons.classList.add('hidden');
+            
+            // Update main page
+            if (mainUserAvatar && mainUserName) {
+                mainUserAvatar.src = user.photoURL || 'https://via.placeholder.com/32';
+                mainUserName.textContent = user.displayName || user.email;
+                mainUserInfo.classList.remove('hidden');
+                mainAuthButtons.classList.add('hidden');
+            }
+            
+            // Update chat indicator
+            if (chatLoginIndicator) {
+                chatLoginIndicator.textContent = '';
+            }
+            
             showToast(`Welcome, ${user.displayName || user.email}!`, 'success');
         } else {
-            // User is signed out
+            // User is signed out - update header
             userInfo.classList.add('hidden');
+            userInfo.classList.remove('flex');
             authButtons.classList.remove('hidden');
+            
+            // Update main page
+            if (mainUserInfo && mainAuthButtons) {
+                mainUserInfo.classList.add('hidden');
+                mainAuthButtons.classList.remove('hidden');
+            }
+            
+            // Update chat indicator
+            if (chatLoginIndicator) {
+                chatLoginIndicator.textContent = '(Login Required)';
+            }
         }
     });
 
@@ -1362,7 +1401,7 @@ function initializeAuth() {
         }
     });
 
-    // Logout
+    // Logout (header)
     logoutBtn.addEventListener('click', async () => {
         try {
             await AuthService.signOut();
@@ -1371,6 +1410,34 @@ function initializeAuth() {
             showToast(`Sign out failed: ${error.message}`, 'error');
         }
     });
+
+    // Main page auth event listeners
+    if (mainGoogleSigninBtn) {
+        mainGoogleSigninBtn.addEventListener('click', async () => {
+            try {
+                await AuthService.signInWithGoogle();
+            } catch (error) {
+                showToast(`Sign in failed: ${error.message}`, 'error');
+            }
+        });
+    }
+
+    if (mainShowEmailAuthBtn) {
+        mainShowEmailAuthBtn.addEventListener('click', () => {
+            emailAuthModal.classList.remove('hidden');
+        });
+    }
+
+    if (mainLogoutBtn) {
+        mainLogoutBtn.addEventListener('click', async () => {
+            try {
+                await AuthService.signOut();
+                showToast('Signed out successfully', 'success');
+            } catch (error) {
+                showToast(`Sign out failed: ${error.message}`, 'error');
+            }
+        });
+    }
 
     // Close modal when clicking outside
     emailAuthModal.addEventListener('click', (e) => {
@@ -1442,6 +1509,11 @@ function initializeChatroom() {
 }
 
 async function openAreaChat(destination) {
+    if (!currentUser) {
+        showToast('Please sign in to access area chat', 'error');
+        return;
+    }
+
     const chatroomModal = document.getElementById('chatroom-modal');
     const chatroomTitle = document.getElementById('chatroom-title');
     const chatroomMessages = document.getElementById('chatroom-messages');

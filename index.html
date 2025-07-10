@@ -38,7 +38,7 @@
             
             <!-- Authentication Section -->
             <div id="auth-section" class="flex items-center gap-4">
-                <div id="user-info" class="hidden flex items-center gap-2">
+                <div id="user-info" class="hidden items-center gap-2">
                     <img id="user-avatar" class="w-8 h-8 rounded-full" alt="User Avatar">
                     <span id="user-name" class="text-sm font-medium"></span>
                     <button id="logout-btn" class="text-xs bg-red-500 hover:bg-red-400 text-white px-2 py-1 rounded">
@@ -83,6 +83,30 @@
     <main class="flex-grow relative flex justify-center items-center">
         <div id="tour-setup"
             class="flex flex-col gap-4 p-8 bg-slate-800/80 backdrop-blur-sm rounded-xl border border-slate-700 shadow-2xl shadow-black z-10 w-full max-w-lg transition-opacity duration-500">
+
+            <!-- Authentication Section for Main Page -->
+            <div id="main-auth-section" class="mb-6 text-center">
+                <div id="main-user-info" class="hidden mb-4">
+                    <div class="flex items-center justify-center gap-2 mb-2">
+                        <img id="main-user-avatar" class="w-10 h-10 rounded-full" alt="User Avatar">
+                        <span id="main-user-name" class="text-lg font-medium text-cyan-400"></span>
+                    </div>
+                    <button id="main-logout-btn" class="bg-red-500 hover:bg-red-400 text-white px-4 py-2 rounded">
+                        Logout
+                    </button>
+                </div>
+                
+                <div id="main-auth-buttons" class="flex flex-col gap-3">
+                    <h3 class="text-lg font-semibold text-cyan-400 mb-2">Sign in to access area chat</h3>
+                    <button id="main-google-signin-btn" class="bg-white text-gray-800 px-4 py-2 rounded hover:bg-gray-100 transition-colors">
+                        🔐 Sign In with Google
+                    </button>
+                    <button id="main-show-email-auth" class="bg-cyan-500 text-white px-4 py-2 rounded hover:bg-cyan-400 transition-colors">
+                        📧 Email Sign In
+                    </button>
+                    <p class="text-sm text-gray-400">Or continue without signing in</p>
+                </div>
+            </div>
 
             <div class="flex flex-col sm:flex-row gap-4">
                 <input type="text" id="destinationInput" placeholder="Enter any city in the world..."
@@ -145,7 +169,7 @@
                 <div class="flex items-center gap-4">
                     <h2 id="gallery-title" class="text-xl md:text-2xl font-bold text-cyan-400"></h2>
                     <button id="open-chatroom-btn" class="bg-purple-500 hover:bg-purple-400 text-white px-4 py-2 rounded-lg transition-colors">
-                        💬 Area Chat
+                        💬 Area Chat <span id="chat-login-indicator" class="text-xs">(Login Required)</span>
                     </button>
                 </div>
                 <button id="endTourButton"
