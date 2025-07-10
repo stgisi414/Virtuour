@@ -479,13 +479,16 @@ let locationProcessor;
 
 // --- 8. TOUR GENERATION ---
 async function generateTour() {
-    currentDestination = destinationInput.value.trim();
+    const userInput = destinationInput.value.trim();
     const selectedFocus = tourFocus.value;
 
-    if (!currentDestination) {
+    if (!userInput) {
         showToast('Please enter a destination city.', 'error');
         return;
     }
+
+    // Get the properly formatted destination name
+    currentDestination = await getProperDestinationName(userInput);
 
     resetTourState();
     toggleVisibility(tourSetupContainer, false);
@@ -1379,6 +1382,47 @@ function normalizeDestinationForChat(destination) {
     return normalized;
 }
 
+// Function to get proper destination name using Google Places API
+async function getProperDestinationName(userInput) {
+    try {
+        const geocodeResults = await new Promise((resolve, reject) => {
+            geocoder.geocode({ address: userInput }, (results, status) => {
+                if (status === 'OK' && results?.[0]) {
+                    resolve(results);
+                } else {
+                    reject(new Error(`Geocoding failed: ${status}`));
+                }
+            });
+        });
+
+        const result = geocodeResults[0];
+        
+        // Extract the city name from address components
+        let cityName = '';
+        let countryName = '';
+        
+        for (const component of result.address_components) {
+            if (component.types.includes('locality')) {
+                cityName = component.long_name;
+            } else if (component.types.includes('administrative_area_level_1') && !cityName) {
+                cityName = component.long_name;
+            } else if (component.types.includes('country')) {
+                countryName = component.long_name;
+            }
+        }
+
+        // Return the properly formatted name
+        return cityName || result.formatted_address.split(',')[0];
+        
+    } catch (error) {
+        console.warn('Could not get proper destination name:', error);
+        // Fallback: capitalize first letter of each word
+        return userInput.trim().split(' ')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+            .join(' ');
+    }
+}
+
 // Function to open the chat for the current location
 async function openAreaChat() {
     if (tourState.state !== 'paused' || currentStopIndex >= tourItinerary.length) return;
@@ -1775,6 +1819,40 @@ async function demoteAdmin(userId, userName) {
         try {
             await chatroomService.demoteAdmin(currentChatroomId, userId, user);
             showToast(`${userName} is no longer an admin`, 'success');
+        } catch (error) {
+            console.error('Error demoting user:', error);
+            showToast('Failed to demote user', 'error');
+        }
+    }
+}
+
+async function promoteToMasterAdmin(userId, userName) {
+    if (!currentChatroomId) return;
+    
+    const user = authService.getCurrentUser();
+    if (!user) return;
+    
+    if (confirm(`Make ${userName} a MASTER ADMIN of this chatroom? This gives them full control over all admins and settings.`)) {
+        try {
+            await chatroomService.addMasterAdmin(currentChatroomId, userId, user);
+            showToast(`${userName} is now a master admin`, 'success');
+        } catch (error) {
+            console.error('Error promoting user:', error);
+            showToast('Failed to promote user', 'error');
+        }
+    }
+}
+
+async function demoteMasterAdmin(userId, userName) {
+    if (!currentChatroomId) return;
+    
+    const user = authService.getCurrentUser();
+    if (!user) return;
+    
+    if (confirm(`Remove ${userName} as master admin?`)) {
+        try {
+            await chatroomService.removeMasterAdmin(currentChatroomId, userId, user);
+            showToast(`${userName} is no longer a master admin`, 'success');
         } catch (error) {
             console.error('Error demoting user:', error);
             showToast('Failed to demote user', 'error');
