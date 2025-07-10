@@ -8,6 +8,10 @@ const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/
 const YOUTUBE_API_URL = 'https://www.googleapis.com/youtube/v3/search';
 const CUSTOM_SEARCH_API_URL = 'https://www.googleapis.com/customsearch/v1';
 
+// Firebase imports
+import AuthService from './auth-service.js';
+import ChatroomService from './chatroom-service.js';
+
 // --- 2. DOM ELEMENT REFERENCES ---
 const destinationInput = document.getElementById('destinationInput');
 const tourFocus = document.getElementById('tourFocus');
@@ -46,6 +50,8 @@ let localTimeInterval = null;
 let destinationTimezone = null;
 let currentUtterance = null;
 let exploreLocation = null;
+let currentChatroom = null;
+let currentUser = null;
 
 // --- 4. TOUR STATE MACHINE ---
 class TourStateMachine {
@@ -228,6 +234,12 @@ window.initializeTourApp = () => {
         
         // Setup state machine listeners
         setupStateMachineListeners();
+        
+        // Initialize Firebase auth
+        initializeAuth();
+        
+        // Initialize chatroom functionality
+        initializeChatroom();
         
         console.log('Tour app initialized successfully');
     } catch (error) {
@@ -1273,7 +1285,234 @@ function updateLocalTime(element) {
     }, 1000);
 }
 
-// --- 16. EVENT LISTENERS ---
+// --- 16. FIREBASE AUTHENTICATION ---
+function initializeAuth() {
+    const userInfo = document.getElementById('user-info');
+    const authButtons = document.getElementById('auth-buttons');
+    const userAvatar = document.getElementById('user-avatar');
+    const userName = document.getElementById('user-name');
+    const logoutBtn = document.getElementById('logout-btn');
+    const googleSigninBtn = document.getElementById('google-signin-btn');
+    const showEmailAuthBtn = document.getElementById('show-email-auth');
+    const emailAuthModal = document.getElementById('email-auth-modal');
+    const closeEmailModal = document.getElementById('close-email-modal');
+    const emailSigninBtn = document.getElementById('email-signin-btn');
+    const emailSignupBtn = document.getElementById('email-signup-btn');
+    const emailInput = document.getElementById('email-input');
+    const passwordInput = document.getElementById('password-input');
+
+    // Listen for auth state changes
+    AuthService.onAuthStateChanged((user) => {
+        currentUser = user;
+        if (user) {
+            // User is signed in
+            userAvatar.src = user.photoURL || 'https://via.placeholder.com/32';
+            userName.textContent = user.displayName || user.email;
+            userInfo.classList.remove('hidden');
+            authButtons.classList.add('hidden');
+            showToast(`Welcome, ${user.displayName || user.email}!`, 'success');
+        } else {
+            // User is signed out
+            userInfo.classList.add('hidden');
+            authButtons.classList.remove('hidden');
+        }
+    });
+
+    // Google Sign In
+    googleSigninBtn.addEventListener('click', async () => {
+        try {
+            await AuthService.signInWithGoogle();
+        } catch (error) {
+            showToast(`Sign in failed: ${error.message}`, 'error');
+        }
+    });
+
+    // Show email auth modal
+    showEmailAuthBtn.addEventListener('click', () => {
+        emailAuthModal.classList.remove('hidden');
+    });
+
+    // Close email auth modal
+    closeEmailModal.addEventListener('click', () => {
+        emailAuthModal.classList.add('hidden');
+        emailInput.value = '';
+        passwordInput.value = '';
+    });
+
+    // Email sign in
+    emailSigninBtn.addEventListener('click', async () => {
+        try {
+            await AuthService.signInWithEmail(emailInput.value, passwordInput.value);
+            emailAuthModal.classList.add('hidden');
+            emailInput.value = '';
+            passwordInput.value = '';
+        } catch (error) {
+            showToast(`Sign in failed: ${error.message}`, 'error');
+        }
+    });
+
+    // Email sign up
+    emailSignupBtn.addEventListener('click', async () => {
+        try {
+            await AuthService.signUpWithEmail(emailInput.value, passwordInput.value);
+            emailAuthModal.classList.add('hidden');
+            emailInput.value = '';
+            passwordInput.value = '';
+        } catch (error) {
+            showToast(`Sign up failed: ${error.message}`, 'error');
+        }
+    });
+
+    // Logout
+    logoutBtn.addEventListener('click', async () => {
+        try {
+            await AuthService.signOut();
+            showToast('Signed out successfully', 'success');
+        } catch (error) {
+            showToast(`Sign out failed: ${error.message}`, 'error');
+        }
+    });
+
+    // Close modal when clicking outside
+    emailAuthModal.addEventListener('click', (e) => {
+        if (e.target === emailAuthModal) {
+            emailAuthModal.classList.add('hidden');
+        }
+    });
+}
+
+// --- 17. CHATROOM FUNCTIONALITY ---
+function initializeChatroom() {
+    const openChatroomBtn = document.getElementById('open-chatroom-btn');
+    const chatroomModal = document.getElementById('chatroom-modal');
+    const closeChatroomBtn = document.getElementById('close-chatroom');
+    const chatroomTitle = document.getElementById('chatroom-title');
+    const chatroomMessages = document.getElementById('chatroom-messages');
+    const chatMessageInput = document.getElementById('chat-message-input');
+    const sendMessageBtn = document.getElementById('send-message-btn');
+    const authRequiredMessage = document.getElementById('auth-required-message');
+    const chatInputContainer = document.getElementById('chat-input-container');
+
+    // Open chatroom
+    openChatroomBtn.addEventListener('click', () => {
+        if (currentDestination) {
+            openAreaChat(currentDestination);
+        }
+    });
+
+    // Close chatroom
+    closeChatroomBtn.addEventListener('click', () => {
+        chatroomModal.classList.add('hidden');
+        if (currentChatroom) {
+            ChatroomService.unsubscribeFromMessages(currentChatroom);
+            currentChatroom = null;
+        }
+    });
+
+    // Send message
+    const sendMessage = async () => {
+        if (!currentUser) {
+            showToast('Please sign in to send messages', 'error');
+            return;
+        }
+
+        const message = chatMessageInput.value.trim();
+        if (!message || !currentChatroom) return;
+
+        try {
+            await ChatroomService.sendMessage(currentChatroom, message, currentUser);
+            chatMessageInput.value = '';
+        } catch (error) {
+            showToast(`Failed to send message: ${error.message}`, 'error');
+        }
+    };
+
+    sendMessageBtn.addEventListener('click', sendMessage);
+    chatMessageInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            sendMessage();
+        }
+    });
+
+    // Close modal when clicking outside
+    chatroomModal.addEventListener('click', (e) => {
+        if (e.target === chatroomModal) {
+            chatroomModal.classList.add('hidden');
+        }
+    });
+}
+
+async function openAreaChat(destination) {
+    const chatroomModal = document.getElementById('chatroom-modal');
+    const chatroomTitle = document.getElementById('chatroom-title');
+    const chatroomMessages = document.getElementById('chatroom-messages');
+    const authRequiredMessage = document.getElementById('auth-required-message');
+    const chatInputContainer = document.getElementById('chat-input-container');
+
+    // Generate area ID from destination
+    const areaId = destination.toLowerCase().replace(/[^a-z0-9]/g, '-');
+    currentChatroom = areaId;
+
+    chatroomTitle.textContent = `${destination} - Area Chat`;
+    chatroomModal.classList.remove('hidden');
+
+    // Show/hide input based on auth status
+    if (currentUser) {
+        authRequiredMessage.classList.add('hidden');
+        chatInputContainer.classList.remove('hidden');
+    } else {
+        authRequiredMessage.classList.remove('hidden');
+        chatInputContainer.classList.add('hidden');
+    }
+
+    try {
+        // Create/get chatroom
+        await ChatroomService.getChatroom(areaId, destination);
+
+        // Subscribe to messages
+        ChatroomService.subscribeToMessages(areaId, (messages) => {
+            displayMessages(messages);
+        });
+
+    } catch (error) {
+        showToast(`Failed to load chatroom: ${error.message}`, 'error');
+    }
+}
+
+function displayMessages(messages) {
+    const chatroomMessages = document.getElementById('chatroom-messages');
+    chatroomMessages.innerHTML = '';
+
+    messages.forEach(message => {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'bg-slate-800 p-3 rounded-lg border border-slate-700';
+        
+        const isCurrentUser = currentUser && message.userId === currentUser.uid;
+        if (isCurrentUser) {
+            messageDiv.classList.add('ml-8', 'bg-cyan-900', 'border-cyan-700');
+        } else {
+            messageDiv.classList.add('mr-8');
+        }
+
+        const timestamp = message.timestamp ? new Date(message.timestamp.seconds * 1000).toLocaleTimeString() : 'now';
+        
+        messageDiv.innerHTML = `
+            <div class="flex items-center gap-2 mb-1">
+                ${message.userPhoto ? `<img src="${message.userPhoto}" class="w-6 h-6 rounded-full" alt="${message.userName}">` : ''}
+                <span class="font-semibold text-cyan-400">${message.userName}</span>
+                <span class="text-xs text-gray-500">${timestamp}</span>
+            </div>
+            <p class="text-white">${message.text}</p>
+        `;
+
+        chatroomMessages.appendChild(messageDiv);
+    });
+
+    // Scroll to bottom
+    chatroomMessages.scrollTop = chatroomMessages.scrollHeight;
+}
+
+// --- 18. EVENT LISTENERS ---
 generateTourButton.addEventListener('click', generateTour);
 endTourButton.addEventListener('click', resetToMainMenu);
 pauseTourButton.addEventListener('click', togglePause);

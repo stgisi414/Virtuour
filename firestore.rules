@@ -1,0 +1,25 @@
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Chatrooms are readable by anyone, but only authenticated users can create
+    match /chatrooms/{chatroomId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+      
+      // Messages within chatrooms
+      match /messages/{messageId} {
+        allow read: if true;
+        allow create: if request.auth != null 
+          && request.auth.uid == resource.data.userId;
+        allow update, delete: if request.auth != null 
+          && request.auth.uid == resource.data.userId;
+      }
+    }
+    
+    // User profiles
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
