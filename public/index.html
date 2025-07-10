@@ -29,16 +29,84 @@
 
 <body class="bg-slate-900 text-slate-200 font-['Exo_2'] flex flex-col h-screen overflow-hidden">
 
-    <header class="text-center p-4 border-b-2 border-cyan-400/50 shadow-lg shadow-cyan-400/10">
-        <div class="flex items-center justify-center gap-3">
-            <img src="virtuour_logo.png" alt="Virtuour Logo" class="w-8 h-8 object-contain">
-            <h1 class="text-2xl font-bold tracking-widest uppercase">Virtuour</h1>
+    <header class="p-4 border-b-2 border-cyan-400/50 shadow-lg shadow-cyan-400/10">
+        <div class="flex items-center justify-between w-full">
+            <div class="flex items-center gap-3">
+                <img src="virtuour_logo.png" alt="Virtuour Logo" class="w-8 h-8 object-contain">
+                <h1 class="text-2xl font-bold tracking-widest uppercase">Virtuour</h1>
+            </div>
+            
+            <!-- Authentication Section -->
+            <div id="auth-section" class="flex items-center gap-4">
+                <div id="user-info" class="hidden items-center gap-3">
+                    <img id="user-avatar" class="w-8 h-8 rounded-full" alt="User Avatar">
+                    <span id="user-name" class="text-sm font-medium"></span>
+                    <button id="logout-btn" class="text-sm bg-red-500 hover:bg-red-400 text-white px-3 py-2 rounded">
+                        Logout
+                    </button>
+                </div>
+                
+                <div id="auth-buttons" class="flex gap-3">
+                    <button id="google-signin-btn" class="bg-white text-gray-800 px-4 py-2 rounded text-sm font-medium hover:bg-gray-100 transition-colors whitespace-nowrap shadow-md">
+                        🔐 Sign In
+                    </button>
+                    <button id="show-email-auth" class="bg-cyan-500 text-white px-4 py-2 rounded text-sm font-medium hover:bg-cyan-400 transition-colors whitespace-nowrap shadow-md">
+                        📧 Email
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Email Auth Modal -->
+        <div id="email-auth-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+            <div class="bg-slate-800 p-6 rounded-lg max-w-md w-full mx-4">
+                <h3 class="text-xl font-bold mb-4 text-cyan-400">Email Authentication</h3>
+                <div class="space-y-4">
+                    <input type="email" id="email-input" placeholder="Email" class="w-full p-2 bg-slate-900 border border-slate-600 rounded text-white">
+                    <input type="password" id="password-input" placeholder="Password" class="w-full p-2 bg-slate-900 border border-slate-600 rounded text-white">
+                    <div class="flex gap-2">
+                        <button id="email-signin-btn" class="flex-1 bg-cyan-500 hover:bg-cyan-400 text-white py-2 rounded">
+                            Sign In
+                        </button>
+                        <button id="email-signup-btn" class="flex-1 bg-green-500 hover:bg-green-400 text-white py-2 rounded">
+                            Sign Up
+                        </button>
+                    </div>
+                    <button id="close-email-modal" class="w-full bg-gray-500 hover:bg-gray-400 text-white py-2 rounded">
+                        Cancel
+                    </button>
+                </div>
+            </div>
         </div>
     </header>
 
     <main class="flex-grow relative flex justify-center items-center">
         <div id="tour-setup"
             class="flex flex-col gap-4 p-8 bg-slate-800/80 backdrop-blur-sm rounded-xl border border-slate-700 shadow-2xl shadow-black z-10 w-full max-w-lg transition-opacity duration-500">
+
+            <!-- Authentication Section for Main Page -->
+            <div id="main-auth-section" class="mb-6 text-center">
+                <div id="main-user-info" class="hidden mb-4">
+                    <div class="flex items-center justify-center gap-2 mb-2">
+                        <img id="main-user-avatar" class="w-10 h-10 rounded-full" alt="User Avatar">
+                        <span id="main-user-name" class="text-lg font-medium text-cyan-400"></span>
+                    </div>
+                    <button id="main-logout-btn" class="bg-red-500 hover:bg-red-400 text-white px-4 py-2 rounded">
+                        Logout
+                    </button>
+                </div>
+                
+                <div id="main-auth-buttons" class="flex flex-col gap-3">
+                    <h3 class="text-lg font-semibold text-cyan-400 mb-2">Sign in to access area chat</h3>
+                    <button id="main-google-signin-btn" class="bg-white text-gray-800 px-4 py-2 rounded hover:bg-gray-100 transition-colors">
+                        🔐 Sign In with Google
+                    </button>
+                    <button id="main-show-email-auth" class="bg-cyan-500 text-white px-4 py-2 rounded hover:bg-cyan-400 transition-colors">
+                        📧 Email Sign In
+                    </button>
+                    <p class="text-sm text-gray-400">Or continue without signing in</p>
+                </div>
+            </div>
 
             <div class="flex flex-col sm:flex-row gap-4">
                 <input type="text" id="destinationInput" placeholder="Enter any city in the world..."
@@ -98,7 +166,12 @@
         <div id="gallery-container"
             class="invisible opacity-0 absolute top-0 left-0 w-full h-full bg-slate-900/95 z-30 flex flex-col p-4 transition-opacity duration-500 ease-in-out">
             <div class="flex justify-between items-center mb-4 flex-shrink-0">
-                <h2 id="gallery-title" class="text-xl md:text-2xl font-bold text-cyan-400"></h2>
+                <div class="flex items-center gap-4">
+                    <h2 id="gallery-title" class="text-xl md:text-2xl font-bold text-cyan-400"></h2>
+                    <button id="open-chatroom-btn" class="bg-purple-500 hover:bg-purple-400 text-white px-4 py-2 rounded-lg transition-colors">
+                        💬 Area Chat <span id="chat-login-indicator" class="text-xs">(Login Required)</span>
+                    </button>
+                </div>
                 <button id="endTourButton"
                     class="bg-cyan-500 text-slate-900 font-bold py-2 px-4 rounded-lg hover:bg-cyan-400 transition-colors">
                     New Tour
@@ -125,10 +198,43 @@
             </div>
         </div>
 
+        <!-- Chatroom Modal -->
+        <div id="chatroom-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+            <div class="bg-slate-800 w-full max-w-2xl h-3/4 mx-4 rounded-lg overflow-hidden flex flex-col">
+                <div class="bg-slate-700 p-4 flex justify-between items-center">
+                    <h3 id="chatroom-title" class="text-xl font-bold text-cyan-400">Area Chat</h3>
+                    <button id="close-chatroom" class="text-gray-400 hover:text-white">✕</button>
+                </div>
+                
+                <div id="chatroom-messages" class="flex-1 p-4 overflow-y-auto space-y-2 bg-slate-900">
+                    <!-- Messages will be loaded here -->
+                </div>
+                
+                <div id="chatroom-input-section" class="p-4 border-t border-slate-600">
+                    <div id="auth-required-message" class="hidden text-center text-gray-400 py-4">
+                        Please sign in to join the conversation
+                    </div>
+                    <div id="chat-input-container" class="flex gap-2">
+                        <input type="text" id="chat-message-input" placeholder="Type your message..." 
+                               class="flex-1 p-2 bg-slate-700 border border-slate-600 rounded text-white">
+                        <button id="send-message-btn" class="bg-cyan-500 hover:bg-cyan-400 text-white px-4 py-2 rounded">
+                            Send
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </main>
 
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
-    <script src="main.js"></script>
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    
+    <script type="module" src="main.js"></script>
 
     <script>
         function initMap() {
