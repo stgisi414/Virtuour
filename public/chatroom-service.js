@@ -28,23 +28,23 @@ class ChatroomService {
       if (!chatroomDoc.exists()) {
         // Create new chatroom
         await setDoc(chatroomRef, {
-          id: areaId,
-          name: areaName,
+          areaId: areaId,
+          areaName: areaName,
           createdAt: serverTimestamp(),
           messageCount: 0
         });
       }
 
-      return areaId;
+      return chatroomRef;
     } catch (error) {
       console.error('Error getting/creating chatroom:', error);
       throw error;
     }
   }
 
-  async sendMessage(chatroomId, messageText, user) {
+  async sendMessage(areaId, messageText, user) {
     try {
-      const messagesRef = collection(db, 'chatrooms', chatroomId, 'messages');
+      const messagesRef = collection(db, 'chatrooms', areaId, 'messages');
       
       await addDoc(messagesRef, {
         text: messageText,
@@ -55,7 +55,7 @@ class ChatroomService {
       });
 
       // Update message count
-      const chatroomRef = doc(db, 'chatrooms', chatroomId);
+      const chatroomRef = doc(db, 'chatrooms', areaId);
       const chatroomDoc = await getDoc(chatroomRef);
       if (chatroomDoc.exists()) {
         await setDoc(chatroomRef, {
@@ -71,9 +71,9 @@ class ChatroomService {
     }
   }
 
-  subscribeToMessages(chatroomId, callback) {
+  subscribeToMessages(areaId, callback) {
     try {
-      const messagesRef = collection(db, 'chatrooms', chatroomId, 'messages');
+      const messagesRef = collection(db, 'chatrooms', areaId, 'messages');
       const q = query(messagesRef, orderBy('timestamp', 'desc'), limit(50));
 
       const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -87,7 +87,7 @@ class ChatroomService {
         callback(messages);
       });
 
-      this.unsubscribes.set(chatroomId, unsubscribe);
+      this.unsubscribes.set(areaId, unsubscribe);
       return unsubscribe;
 
     } catch (error) {
@@ -96,11 +96,11 @@ class ChatroomService {
     }
   }
 
-  unsubscribeFromMessages(chatroomId) {
-    const unsubscribe = this.unsubscribes.get(chatroomId);
+  unsubscribeFromMessages(areaId) {
+    const unsubscribe = this.unsubscribes.get(areaId);
     if (unsubscribe) {
       unsubscribe();
-      this.unsubscribes.delete(chatroomId);
+      this.unsubscribes.delete(areaId);
     }
   }
 
