@@ -1,0 +1,74 @@
+logger.ts:123 [2025-07-10T23:24:07.178Z]  @firebase/firestore: Firestore (11.10.0): Uncaught Error in snapshot listener: FirebaseError: [code=permission-denied]: Missing or insufficient permissions.
+defaultLogHandler	@	logger.ts:123
+error	@	log.ts:25
+__PRIVATE_logError	@	log.ts:66
+error	@	async_observer.ts:54
+onError	@	event_manager.ts:485
+__PRIVATE_eventManagerOnWatchError	@	event_manager.ts:367
+__PRIVATE_removeAndCleanupTarget	@	sync_engine_impl.ts:944
+(anonymous)	@	sync_engine_impl.ts:735
+Promise.then		
+__PRIVATE_syncEngineRejectListen	@	sync_engine_impl.ts:734
+__PRIVATE_handleTargetError	@	remote_store.ts:655
+__PRIVATE_onWatchStreamChange	@	remote_store.ts:469
+onNext	@	persistent_stream.ts:684
+(anonymous)	@	persistent_stream.ts:554
+(anonymous)	@	persistent_stream.ts:599
+(anonymous)	@	async_queue_impl.ts:138
+(anonymous)	@	async_queue_impl.ts:192
+Promise.then		
+uc	@	async_queue_impl.ts:189
+enqueue	@	async_queue_impl.ts:136
+enqueueAndForget	@	async_queue_impl.ts:97
+(anonymous)	@	persistent_stream.ts:597
+(anonymous)	@	persistent_stream.ts:541
+a_	@	webchannel_connection.ts:56
+(anonymous)	@	webchannel_connection.ts:412
+(anonymous)	@	webchannel_connection.ts:306
+Promise.then		
+Ho	@	webchannel_connection.ts:272
+send	@	stream_bridge.ts:94
+k_	@	persistent_stream.ts:330
+H_	@	persistent_stream.ts:701
+__PRIVATE_sendWatchRequest	@	remote_store.ts:357
+(anonymous)	@	remote_store.ts:421
+__PRIVATE_onWatchStreamOpen	@	remote_store.ts:417
+(anonymous)	@	persistent_stream.ts:533
+(anonymous)	@	persistent_stream.ts:599
+(anonymous)	@	async_queue_impl.ts:138
+(anonymous)	@	async_queue_impl.ts:192
+Promise.then		
+uc	@	async_queue_impl.ts:189
+enqueue	@	async_queue_impl.ts:136
+enqueueAndForget	@	async_queue_impl.ts:97
+(anonymous)	@	persistent_stream.ts:597
+(anonymous)	@	persistent_stream.ts:518
+o_	@	webchannel_connection.ts:50
+(anonymous)	@	webchannel_connection.ts:442
+setTimeout		
+P_	@	webchannel_connection.ts:442
+z_	@	persistent_stream.ts:667
+W_	@	persistent_stream.ts:505
+(anonymous)	@	persistent_stream.ts:482
+Promise.then		
+auth	@	persistent_stream.ts:480
+start	@	persistent_stream.ts:274
+__PRIVATE_startWatchStream	@	remote_store.ts:389
+__PRIVATE_remoteStoreListen	@	remote_store.ts:288
+__PRIVATE_allocateTargetAndMaybeListen	@	sync_engine_impl.ts:377
+await in __PRIVATE_allocateTargetAndMaybeListen		
+__PRIVATE_syncEngineListen	@	sync_engine_impl.ts:316
+__PRIVATE_eventManagerListen	@	event_manager.ts:176
+__PRIVATE_readDocumentViaSnapshotListener	@	firestore_client.ts:498
+(anonymous)	@	firestore_client.ts:501
+await in (anonymous)		
+(anonymous)	@	async_queue_impl.ts:138
+(anonymous)	@	async_queue_impl.ts:192
+Promise.then		
+uc	@	async_queue_impl.ts:189
+enqueue	@	async_queue_impl.ts:136
+enqueueAndForget	@	async_queue_impl.ts:97
+__PRIVATE_firestoreClientGetDocumentViaSnapshotListener	@	firestore_client.ts:664
+getDoc	@	reference_impl.ts:127
+getChatroom	@	chatroom-service.js:39
+openAreaChat	@	main.js:1408
