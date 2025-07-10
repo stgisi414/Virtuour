@@ -1361,10 +1361,12 @@ let sendButton = null;
 
 // Function to normalize destination for consistent chat room ID
 function normalizeDestinationForChat(destination) {
-    if (!destination) return null;
+    if (!destination || typeof destination !== 'string') return null;
     
     // Convert to lowercase and remove common suffixes
     let normalized = destination.toLowerCase().trim();
+    
+    if (normalized.length === 0) return null;
     
     // Remove country suffixes
     normalized = normalized.replace(/,?\s*(south korea|korea|japan|china|usa|united states|uk|united kingdom|france|germany|italy|spain)$/i, '');
@@ -1379,7 +1381,16 @@ function normalizeDestinationForChat(destination) {
     // Replace spaces with underscores and remove special characters
     normalized = normalized.replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
     
-    return normalized;
+    // Ensure minimum length
+    if (normalized.length < 3) {
+        // If too short, try using the original input with basic cleaning
+        normalized = destination.toLowerCase().trim()
+            .replace(/\s+/g, '_')
+            .replace(/[^a-z0-9_]/g, '')
+            .substring(0, 50);
+    }
+    
+    return normalized.length >= 3 ? normalized : null;
 }
 
 // Function to get proper destination name using Google Places API
@@ -1427,11 +1438,24 @@ async function getProperDestinationName(userInput) {
 async function openAreaChat() {
     if (tourState.state !== 'paused' || currentStopIndex >= tourItinerary.length) return;
 
-    // Use normalized destination instead of individual stop place ID
-    const chatroomId = normalizeDestinationForChat(currentDestination);
+    // Use current destination or fallback to current stop location
+    let destinationForChat = currentDestination;
+    
+    // If currentDestination is not set, try to use the current stop's location
+    if (!destinationForChat && tourItinerary.length > 0 && currentStopIndex < tourItinerary.length) {
+        const currentStop = tourItinerary[currentStopIndex];
+        destinationForChat = currentStop.locationName;
+    }
+    
+    // Further fallback to input value
+    if (!destinationForChat && destinationInput.value.trim()) {
+        destinationForChat = destinationInput.value.trim();
+    }
+
+    const chatroomId = normalizeDestinationForChat(destinationForChat);
 
     if (!chatroomId) {
-        showToast('Could not determine the area chat ID.', 'error');
+        showToast('Could not determine the area chat ID. Please start a tour first.', 'error');
         return;
     }
 
@@ -1443,7 +1467,7 @@ async function openAreaChat() {
 
     try {
         currentChatroomId = chatroomId;
-        chatroomTitle.textContent = `${currentDestination} Area Chat`;
+        chatroomTitle.textContent = `${destinationForChat} Area Chat`;
         
         // Show modal
         chatroomModal.classList.remove('hidden');
@@ -1462,7 +1486,7 @@ async function openAreaChat() {
             displayMessages(messages, chatroomData, user);
         });
         
-        showToast(`Joined ${currentDestination} area chat`, 'success');
+        showToast(`Joined ${destinationForChat} area chat`, 'success');
         
     } catch (error) {
         console.error('Error opening area chat:', error);
