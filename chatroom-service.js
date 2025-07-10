@@ -15,7 +15,7 @@ import {
   setDoc,
   getDoc,
   getDocs
-} from 'firebase/firestore';
+} from './firebase-config.js';
 
 console.log('💬 CHATROOM SERVICE: Firestore db object:', db);
 console.log('💬 CHATROOM SERVICE: Firestore functions imported successfully');
