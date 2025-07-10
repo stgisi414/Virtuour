@@ -1,5 +1,18 @@
 /* Custom base styles and component overrides that work with Tailwind */
 
+/* Font loading optimization */
+@import url('https://fonts.googleapis.com/css2?family=Exo+2:wght@300;400;500;600;700;800&display=swap');
+
+/* Ensure font loads properly */
+body {
+  font-display: swap;
+}
+
+/* Font loading overlay */
+#font-loading-overlay {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
 /* Add a subtle text shadow for readability on complex backgrounds */
 .text-shadow {
     text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);

@@ -20,6 +20,11 @@
     <meta name="keywords" content="virtual tour, AI tour guide, travel, explore, cities">
     <meta name="author" content="Virtuour">
 
+    <!-- Google Fonts - Preload and Load -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
     <script src="https://cdn.tailwindcss.com"></script>
 
     <!-- Firebase CDN -->
@@ -39,6 +44,14 @@
 </head>
 
 <body class="bg-slate-900 text-slate-200 font-['Exo_2'] flex flex-col h-screen overflow-hidden">
+
+    <!-- Font Loading Overlay -->
+    <div id="font-loading-overlay" class="fixed inset-0 bg-slate-900 z-[9999] flex items-center justify-center">
+        <div class="text-center">
+            <div class="spinner mb-4"></div>
+            <p class="text-slate-400 text-lg">Loading Virtuour...</p>
+        </div>
+    </div>
 
     <header class="p-4 border-b-2 border-cyan-400/50 shadow-lg shadow-cyan-400/10">
         <div class="flex items-center justify-between w-full">
@@ -225,6 +238,19 @@
 
 
     <script>
+        // Font loading detection
+        document.fonts.ready.then(function() {
+            // Hide the loading overlay once fonts are loaded
+            const overlay = document.getElementById('font-loading-overlay');
+            if (overlay) {
+                overlay.style.opacity = '0';
+                overlay.style.transition = 'opacity 0.3s ease-out';
+                setTimeout(() => {
+                    overlay.style.display = 'none';
+                }, 300);
+            }
+        });
+
         function initMap() {
             // Wait for main.js to load before calling initializeTourApp
             if (window.initializeTourApp) {
