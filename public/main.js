@@ -1405,7 +1405,7 @@ async function openAreaChat() {
         chatroomModal.classList.remove('hidden');
         
         // Setup chatroom
-        await chatroomService.getChatroom(chatroomId, currentDestination);
+        await chatroomService.getChatroom(chatroomId, currentDestination, user);
         
         // Get chatroom data to check admin status
         const chatroomData = await chatroomService.getChatroomData(chatroomId);
