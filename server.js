@@ -69,6 +69,9 @@ app.post('/api/generate-tour', async (req, res) => {
       return res.status(400).json({ error: 'Destination and focus are required' });
     }
 
+    console.log('Generating tour for:', destination, 'with focus:', focus);
+    console.log('Using Gemini API key:', GOOGLE_GEMINI_KEY ? 'Present' : 'Missing');
+
     const prompt = `
       Create a 5-stop virtual tour itinerary for "${destination}" with focus on "${focus}".
       
@@ -106,7 +109,9 @@ app.post('/api/generate-tour', async (req, res) => {
     });
 
     if (!response.ok) {
-      throw new Error(`Gemini API Error: ${response.status}`);
+      const errorText = await response.text();
+      console.error('Gemini API Error:', response.status, errorText);
+      throw new Error(`Gemini API Error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
