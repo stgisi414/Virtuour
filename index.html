@@ -29,15 +29,15 @@
 
 <body class="bg-slate-900 text-slate-200 font-['Exo_2'] flex flex-col h-screen overflow-hidden">
 
-    <header class="text-center p-4 border-b-2 border-cyan-400/50 shadow-lg shadow-cyan-400/10">
-        <div class="flex items-center justify-between">
+    <header class="p-4 border-b-2 border-cyan-400/50 shadow-lg shadow-cyan-400/10">
+        <div class="flex items-center justify-between w-full">
             <div class="flex items-center gap-3">
                 <img src="/virtuour_logo.png" alt="Virtuour Logo" class="w-8 h-8 object-contain">
                 <h1 class="text-2xl font-bold tracking-widest uppercase">Virtuour</h1>
             </div>
             
             <!-- Authentication Section -->
-            <div id="auth-section" class="flex items-center gap-4">
+            <div id="auth-section" class="flex items-center gap-2">
                 <div id="user-info" class="hidden items-center gap-2">
                     <img id="user-avatar" class="w-8 h-8 rounded-full" alt="User Avatar">
                     <span id="user-name" class="text-sm font-medium"></span>
@@ -47,11 +47,11 @@
                 </div>
                 
                 <div id="auth-buttons" class="flex gap-2">
-                    <button id="google-signin-btn" class="bg-white text-gray-800 px-3 py-1 rounded text-sm hover:bg-gray-100 transition-colors">
-                        🔐 Sign In with Google
+                    <button id="google-signin-btn" class="bg-white text-gray-800 px-2 py-1 rounded text-xs hover:bg-gray-100 transition-colors whitespace-nowrap">
+                        🔐 Sign In
                     </button>
-                    <button id="show-email-auth" class="bg-cyan-500 text-white px-3 py-1 rounded text-sm hover:bg-cyan-400 transition-colors">
-                        📧 Email Sign In
+                    <button id="show-email-auth" class="bg-cyan-500 text-white px-2 py-1 rounded text-xs hover:bg-cyan-400 transition-colors whitespace-nowrap">
+                        📧 Email
                     </button>
                 </div>
             </div>
