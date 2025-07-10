@@ -26,20 +26,13 @@ class ChatroomService {
 
   async getChatroom(areaId, areaName, currentUser = null) {
     try {
-      // Validate areaId to prevent abuse
-      if (!areaId || typeof areaId !== 'string') {
-        throw new Error('Invalid area ID');
+      if (!areaId || !areaName) {
+        throw new Error('Area ID and name are required');
       }
-      
-      // Sanitize areaId - only allow alphanumeric, hyphens, underscores
+
       const sanitizedAreaId = areaId.replace(/[^a-zA-Z0-9_-]/g, '').substring(0, 50);
       if (sanitizedAreaId.length < 3) {
-        throw new Error('Area ID too short after sanitization');
-      }
-      
-      // Validate area name
-      if (!areaName || typeof areaName !== 'string' || areaName.length < 2 || areaName.length > 100) {
-        throw new Error('Invalid area name');
+        throw new Error('Invalid area ID');
       }
 
       const chatroomRef = doc(db, 'chatrooms', sanitizedAreaId);
@@ -50,29 +43,18 @@ class ChatroomService {
           throw new Error('Must be authenticated to create chatroom');
         }
 
-        // Rate limiting check - prevent user from creating too many chatrooms
-        const userChatroomsQuery = query(
-          collection(db, 'chatrooms'),
-          where('createdBy', '==', currentUser.uid)
-        );
-        const userChatrooms = await getDocs(userChatroomsQuery);
-        
-        if (userChatrooms.size >= 10) { // Limit to 10 chatrooms per user
-          throw new Error('You have reached the maximum number of chatrooms you can create');
-        }
-
-        // Create new chatroom with strict validation
-        const initialAdmins = [currentUser.uid];
+        // Create new chatroom with minimal required fields
         await setDoc(chatroomRef, {
           areaId: sanitizedAreaId,
           areaName: areaName.trim(),
           createdAt: serverTimestamp(),
           lastActivityAt: serverTimestamp(),
           messageCount: 0,
-          admins: initialAdmins,
-          masterAdmins: [], // Will be set by Cloud Function
+          admins: [currentUser.uid],
+          masterAdmins: [],
           bannedUsers: [],
           moderators: [],
+          kickedUsers: [],
           createdBy: currentUser.uid
         });
       } else {

@@ -4,9 +4,10 @@ service cloud.firestore {
     // Chatroom rules
     match /chatrooms/{chatroomId} {
       allow read: if request.auth != null;
+
       allow create: if request.auth != null &&
-        // Strict validation to prevent abuse
-        request.resource.data.keys().hasAll(['areaId', 'areaName', 'createdAt', 'lastActivityAt', 'messageCount', 'admins', 'masterAdmins', 'bannedUsers', 'moderators', 'createdBy']) &&
+        // Basic validation to prevent abuse
+        request.resource.data.keys().hasAll(['areaId', 'areaName', 'createdAt', 'createdBy']) &&
         request.resource.data.areaId == chatroomId &&
         request.resource.data.createdBy == request.auth.uid &&
         // Prevent arbitrary chatroom IDs - must match specific pattern
@@ -14,21 +15,16 @@ service cloud.firestore {
         // Area name validation
         request.resource.data.areaName is string &&
         request.resource.data.areaName.size() >= 2 &&
-        request.resource.data.areaName.size() <= 100 &&
-        // Initialize with safe defaults
-        request.resource.data.messageCount == 0 &&
-        request.resource.data.admins.size() <= 1 &&
-        request.resource.data.masterAdmins.size() == 0 &&
-        request.resource.data.bannedUsers.size() == 0 &&
-        request.resource.data.moderators.size() == 0;
+        request.resource.data.areaName.size() <= 100;
+
       allow update: if request.auth != null && 
         (
-          // Allow updating message count and last message time
-          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['messageCount', 'lastMessageAt'])) ||
-          // Allow admins to update chatroom settings (only if chatroom exists and user is admin/master admin)
+          // Allow updating message count and last message time for any authenticated user
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['messageCount', 'lastMessageAt', 'lastActivityAt']) ||
+          // Allow admins/master admins to update user management fields
           (exists(/databases/$(database)/documents/chatrooms/$(chatroomId)) &&
-           resource.data.keys().hasAny(['admins', 'masterAdmins']) && 
-           (request.auth.uid in resource.data.admins || request.auth.uid in resource.data.get('masterAdmins', [])) &&
+           (request.auth.uid in resource.data.get('admins', []) || 
+            request.auth.uid in resource.data.get('masterAdmins', [])) &&
            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['admins', 'masterAdmins', 'bannedUsers', 'kickedUsers', 'moderators', 'lastActivityAt']))
         );
 
@@ -36,11 +32,7 @@ service cloud.firestore {
       match /messages/{messageId} {
         allow read: if request.auth != null && 
           // Check message hasn't expired
-          resource.data.expiresAt > request.time &&
-          // Check if user is not banned (only if chatroom exists)
-          (!exists(/databases/$(database)/documents/chatrooms/$(chatroomId)) ||
-           !get(/databases/$(database)/documents/chatrooms/$(chatroomId)).data.keys().hasAny(['bannedUsers']) ||
-           !(request.auth.uid in get(/databases/$(database)/documents/chatrooms/$(chatroomId)).data.bannedUsers));
+          resource.data.expiresAt > request.time;
 
         allow create: if request.auth != null && 
           // User can only create messages with their own userId
@@ -48,20 +40,16 @@ service cloud.firestore {
           // Message must have required fields
           request.resource.data.keys().hasAll(['text', 'userId', 'userName', 'timestamp', 'expiresAt']) &&
           // Expiry time must be within 48 hours
-          request.resource.data.expiresAt <= request.time + duration.value(48, 'h') &&
-          // Check if user is not banned (only if chatroom exists)
-          (!exists(/databases/$(database)/documents/chatrooms/$(chatroomId)) ||
-           !get(/databases/$(database)/documents/chatrooms/$(chatroomId)).data.keys().hasAny(['bannedUsers']) ||
-           !(request.auth.uid in get(/databases/$(database)/documents/chatrooms/$(chatroomId)).data.bannedUsers));
+          request.resource.data.expiresAt <= request.time + duration.value(48, 'h');
 
         allow delete: if request.auth != null && 
           (
             // Message author can delete their own message
             resource.data.userId == request.auth.uid ||
-            // Admins can delete any message (only if chatroom exists and user is admin)
+            // Admins can delete any message
             (exists(/databases/$(database)/documents/chatrooms/$(chatroomId)) &&
-             get(/databases/$(database)/documents/chatrooms/$(chatroomId)).data.keys().hasAny(['admins']) &&
-             request.auth.uid in get(/databases/$(database)/documents/chatrooms/$(chatroomId)).data.admins)
+             (request.auth.uid in get(/databases/$(database)/documents/chatrooms/$(chatroomId)).data.get('admins', []) ||
+              request.auth.uid in get(/databases/$(database)/documents/chatrooms/$(chatroomId)).data.get('masterAdmins', [])))
           );
       }
     }
