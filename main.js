@@ -1,4 +1,3 @@
-
 // --- 1. API KEY AND ENDPOINT CONFIGURATION ---
 const GEMINI_API_KEY = 'AIzaSyDtLyUB-2wocE-uNG5e3pwNFArjn1GVTco';
 const GOOGLE_API_KEY = 'AIzaSyCYxnWpHNlzAz5h2W3pGTaW_oIP1ukTs1Y';
@@ -224,23 +223,23 @@ window.initializeTourApp = () => {
             motionTracking: false,
             motionTrackingControl: false,
         });
-        
+
         geocoder = new google.maps.Geocoder();
         streetViewService = new google.maps.StreetViewService();
         locationProcessor = new LocationProcessor(geocoder, streetViewService);
-        
+
         generateTourButton.disabled = false;
         generateTourButton.textContent = 'Generate Tour';
-        
+
         // Setup state machine listeners
         setupStateMachineListeners();
-        
+
         // Initialize Firebase auth
         initializeAuth();
-        
+
         // Initialize chatroom functionality
         initializeChatroom();
-        
+
         console.log('Tour app initialized successfully');
     } catch (error) {
         console.error('Initialization failed:', error);
@@ -284,7 +283,7 @@ class LocationProcessor {
 
     async processLocation(locationName, cityName) {
         const cacheKey = `${locationName}_${cityName}`;
-        
+
         if (this.cache.has(cacheKey)) {
             return this.cache.get(cacheKey);
         }
@@ -302,7 +301,7 @@ class LocationProcessor {
     async _findOptimalLocation(locationName, cityName) {
         // Step 1: Get multiple geocoding candidates
         const candidates = await this._getGeocodingCandidates(locationName, cityName);
-        
+
         if (candidates.length === 0) {
             throw new Error(`No geocoding results for ${locationName}`);
         }
@@ -310,7 +309,7 @@ class LocationProcessor {
         // Step 2: Find the best candidate with Street View
         for (const candidate of candidates) {
             const streetViewResult = await this._findNearestStreetView(candidate);
-            
+
             if (streetViewResult.hasStreetView) {
                 return {
                     locationName,
@@ -346,12 +345,12 @@ class LocationProcessor {
         ];
 
         const candidates = [];
-        
+
         for (const query of queries) {
             try {
                 const results = await this._geocodeQuery(query);
                 candidates.push(...results);
-                
+
                 if (candidates.length >= 3) break; // Enough candidates
             } catch (error) {
                 console.warn(`Geocoding failed for "${query}":`, error.message);
@@ -375,7 +374,7 @@ class LocationProcessor {
                 }, 
                 (results, status) => {
                     clearTimeout(timeoutId);
-                    
+
                     if (status === 'OK' && results?.length > 0) {
                         const candidates = results.slice(0, 3).map(result => ({
                             lat: result.geometry.location.lat(),
@@ -430,7 +429,7 @@ class LocationProcessor {
                 preference: google.maps.StreetViewPreference.NEAREST
             }, (data, status) => {
                 clearTimeout(timeoutId);
-                
+
                 if (status === 'OK' && data?.location) {
                     resolve({
                         lat: data.location.latLng.lat(),
@@ -453,19 +452,19 @@ class LocationProcessor {
 
     _calculateAccuracy(result) {
         let score = 0;
-        
+
         // Prefer specific place types
         const highValueTypes = ['tourist_attraction', 'museum', 'park', 'landmark', 'establishment'];
         const mediumValueTypes = ['point_of_interest', 'premise'];
-        
+
         if (result.types.some(type => highValueTypes.includes(type))) score += 10;
         else if (result.types.some(type => mediumValueTypes.includes(type))) score += 5;
-        
+
         // Prefer more precise geometry
         if (result.geometry.location_type === 'ROOFTOP') score += 8;
         else if (result.geometry.location_type === 'RANGE_INTERPOLATED') score += 5;
         else if (result.geometry.location_type === 'GEOMETRIC_CENTER') score += 3;
-        
+
         return score;
     }
 
@@ -473,13 +472,13 @@ class LocationProcessor {
         // Remove duplicates based on coordinates proximity
         const unique = [];
         const threshold = 0.001; // ~100m
-        
+
         for (const candidate of candidates) {
             const isDuplicate = unique.some(existing => 
                 Math.abs(existing.lat - candidate.lat) < threshold &&
                 Math.abs(existing.lng - candidate.lng) < threshold
             );
-            
+
             if (!isDuplicate) {
                 // Boost score if address contains city name
                 if (candidate.formattedAddress.toLowerCase().includes(cityName.toLowerCase())) {
@@ -488,7 +487,7 @@ class LocationProcessor {
                 unique.push(candidate);
             }
         }
-        
+
         // Sort by accuracy score (highest first)
         return unique.sort((a, b) => b.accuracy - a.accuracy);
     }
@@ -505,39 +504,39 @@ let locationProcessor;
 async function generateTour() {
     currentDestination = destinationInput.value.trim();
     const selectedFocus = tourFocus.value;
-    
+
     if (!currentDestination) {
         showToast('Please enter a destination city.', 'error');
         return;
     }
-    
+
     resetTourState();
     toggleVisibility(tourSetupContainer, false);
-    
+
     try {
         setLoading(true, `Creating ${selectedFocus} tour for ${currentDestination}...`);
-        
+
         const rawItinerary = await fetchItinerary(currentDestination, selectedFocus);
-        
+
         if (!rawItinerary || rawItinerary.length === 0) {
             throw new Error('Failed to generate tour itinerary');
         }
-        
+
         setLoading(true, 'Processing locations...');
         tourItinerary = await processItinerary(rawItinerary, currentDestination);
-        
+
         if (tourItinerary.length === 0) {
             throw new Error('No valid locations found for this tour');
         }
-        
+
         console.log(`Successfully processed ${tourItinerary.length} locations`);
-        
+
         await initializeTourUI();
         setLoading(false);
-        
+
         // Start the tour with the new state machine
         startTourSequence();
-        
+
     } catch (error) {
         console.error('Error generating tour:', error);
         showToast(`Failed to generate tour: ${error.message}`, 'error');
@@ -548,16 +547,16 @@ async function generateTour() {
 async function processItinerary(rawItinerary, cityName) {
     const processedStops = [];
     const batchSize = 2; // Process in small batches to avoid rate limits
-    
+
     for (let i = 0; i < rawItinerary.length; i += batchSize) {
         const batch = rawItinerary.slice(i, i + batchSize);
         const batchPromises = batch.map(async (stop, batchIndex) => {
             const globalIndex = i + batchIndex;
             setLoading(true, `Processing ${globalIndex + 1}/${rawItinerary.length}: ${stop.locationName}...`);
-            
+
             try {
                 const locationData = await locationProcessor.processLocation(stop.locationName, cityName);
-                
+
                 return {
                     ...locationData,
                     briefDescription: stop.briefDescription
@@ -567,22 +566,22 @@ async function processItinerary(rawItinerary, cityName) {
                 return null;
             }
         });
-        
+
         const batchResults = await Promise.allSettled(batchPromises);
-        
+
         batchResults.forEach((result, batchIndex) => {
             if (result.status === 'fulfilled' && result.value) {
                 processedStops.push(result.value);
                 console.log(`✓ Processed: ${result.value.locationName}`);
             }
         });
-        
+
         // Small delay between batches to respect rate limits
         if (i + batchSize < rawItinerary.length) {
             await new Promise(resolve => setTimeout(resolve, 500));
         }
     }
-    
+
     return processedStops;
 }
 
@@ -590,7 +589,7 @@ async function processItinerary(rawItinerary, cityName) {
 function startTourSequence() {
     currentStopIndex = 0;
     tourState.start();
-    
+
     // Move to first location immediately
     moveToLocation(tourItinerary[0])
         .then(() => {
@@ -606,7 +605,7 @@ function startTourSequence() {
 async function moveToLocation(stop) {
     try {
         console.log(`Moving to: ${stop.locationName}${stop.hasStreetView ? ' (Street View)' : ' (Satellite)'}`);
-        
+
         if (stop.hasStreetView && stop.panoId) {
             // Use specific panorama ID for better accuracy
             streetView.setPano(stop.panoId);
@@ -628,9 +627,9 @@ async function moveToLocation(stop) {
                 zoom: 1 
             });
         }
-        
+
         updateAddressLabel(stop.formattedAddress || stop.locationName);
-        
+
         // Verify the position was set correctly
         setTimeout(() => {
             const currentPos = streetView.getPosition();
@@ -638,7 +637,7 @@ async function moveToLocation(stop) {
                 console.log(`✓ Positioned at: ${currentPos.lat().toFixed(6)}, ${currentPos.lng().toFixed(6)}`);
             }
         }, 1000);
-        
+
     } catch (error) {
         console.error(`Error moving to ${stop.locationName}:`, error);
         throw error;
@@ -647,18 +646,18 @@ async function moveToLocation(stop) {
 
 function presentCurrentLocation() {
     if (currentStopIndex >= tourItinerary.length) return;
-    
+
     const location = tourItinerary[currentStopIndex];
     stopSpeech();
-    
+
     // Show information
     const subtitle = `${location.locationName}: ${location.briefDescription}`;
     subtitlesContainer.textContent = subtitle;
     toggleVisibility(tourInfoContainer, true);
-    
+
     // Auto-pause at each location
     tourState.pause();
-    
+
     // Speak description
     speakLocationDescription(location);
 }
@@ -666,23 +665,23 @@ function presentCurrentLocation() {
 function speakLocationDescription(location) {
     if ('speechSynthesis' in window) {
         const text = `Welcome to ${location.locationName}. ${location.briefDescription}. You can explore this area or continue to the next location.`;
-        
+
         currentUtterance = new SpeechSynthesisUtterance(text);
         currentUtterance.rate = 0.9;
         currentUtterance.pitch = 1.1;
-        
+
         currentUtterance.onend = () => {
             toggleVisibility(tourInfoContainer, false);
             currentUtterance = null;
         };
-        
+
         currentUtterance.onerror = () => {
             toggleVisibility(tourInfoContainer, false);
             currentUtterance = null;
         };
-        
+
         synth.speak(currentUtterance);
-        
+
         // Fallback timeout
         tourState.setTimeout(() => {
             if (currentUtterance) {
@@ -704,12 +703,12 @@ function continueToNextLocation() {
         completeTour();
         return;
     }
-    
+
     const nextIndex = currentStopIndex + 1;
     const nextLocation = tourItinerary[nextIndex];
-    
+
     setLoading(true, `Traveling to ${nextLocation.locationName}...`);
-    
+
     // Use requestAnimationFrame for smooth transitions
     const transition = createSmoothTransition(
         tourItinerary[currentStopIndex],
@@ -720,7 +719,7 @@ function continueToNextLocation() {
             presentCurrentLocation();
         }
     );
-    
+
     transition.start();
 }
 
@@ -729,7 +728,7 @@ function createSmoothTransition(fromStop, toStop, onComplete) {
     const toPos = toStop.streetViewCoordinates;
     const duration = 2000; // 2 seconds
     const startTime = Date.now();
-    
+
     return {
         start() {
             const animate = () => {
@@ -737,16 +736,16 @@ function createSmoothTransition(fromStop, toStop, onComplete) {
                     onComplete();
                     return;
                 }
-                
+
                 const elapsed = Date.now() - startTime;
                 const progress = Math.min(elapsed / duration, 1);
                 const eased = easeInOutCubic(progress);
-                
+
                 const lat = fromPos.lat + (toPos.lat - fromPos.lat) * eased;
                 const lng = fromPos.lng + (toPos.lng - fromPos.lng) * eased;
-                
+
                 streetView.setPosition(new google.maps.LatLng(lat, lng));
-                
+
                 if (progress < 1) {
                     requestAnimationFrame(animate);
                 } else {
@@ -756,7 +755,7 @@ function createSmoothTransition(fromStop, toStop, onComplete) {
                         .catch(onComplete);
                 }
             };
-            
+
             requestAnimationFrame(animate);
         }
     };
@@ -780,7 +779,7 @@ function updateControlsForTouring() {
     exploreButton.style.display = 'none';
     returnToTourButton.style.display = 'none';
     pauseTourButton.style.display = 'flex';
-    
+
     pauseIcon.textContent = '⏸️';
     pauseText.textContent = 'Pause Tour';
     pauseTourButton.className = 'bg-red-500 hover:bg-red-400 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-red-400 transition-colors duration-300 flex items-center gap-2';
@@ -790,7 +789,7 @@ function updateControlsForPaused() {
     exploreButton.style.display = 'flex';
     returnToTourButton.style.display = 'none';
     pauseTourButton.style.display = 'flex';
-    
+
     if (currentStopIndex >= tourItinerary.length - 1) {
         pauseIcon.textContent = '🏁';
         pauseText.textContent = 'End Tour';
@@ -824,16 +823,16 @@ function togglePause() {
 
 async function exploreCurrentLocation() {
     if (tourState.state !== 'paused' || currentStopIndex >= tourItinerary.length) return;
-    
+
     const currentStop = tourItinerary[currentStopIndex];
     tourState.explore();
     exploreLocation = streetView.getPosition();
-    
+
     setLoading(true, `Exploring ${currentStop.locationName}...`);
-    
+
     try {
         const randomPanorama = await findRandomPanoramaInArea(currentStop);
-        
+
         if (randomPanorama && randomPanorama.panoId) {
             streetView.setPano(randomPanorama.panoId);
             streetView.setPov({
@@ -857,7 +856,7 @@ async function exploreCurrentLocation() {
                 showToast('No other viewpoints available in this area', 'info');
             }
         }
-        
+
     } catch (error) {
         console.error('Exploration error:', error);
         showToast('Exploration complete', 'info');
@@ -871,36 +870,36 @@ async function findRandomPanoramaInArea(stop) {
     const searchAttempts = 8;
     const baseRadius = 150; // meters
     const maxRadius = 250;
-    
+
     for (let attempt = 0; attempt < searchAttempts; attempt++) {
         try {
             // Create random offset within circular area
             const radius = baseRadius + Math.random() * (maxRadius - baseRadius);
             const angle = Math.random() * 2 * Math.PI;
-            
+
             // Convert to lat/lng offset (rough approximation)
             const latOffset = (radius / 111000) * Math.cos(angle); // ~111km per degree lat
             const lngOffset = (radius / (111000 * Math.cos(stop.coordinates.lat * Math.PI / 180))) * Math.sin(angle);
-            
+
             const searchLat = stop.coordinates.lat + latOffset;
             const searchLng = stop.coordinates.lng + lngOffset;
             const searchPosition = new google.maps.LatLng(searchLat, searchLng);
-            
+
             const panorama = await searchPanoramaAtLocation(searchPosition, 75);
-            
+
             if (panorama && panorama.panoId && panorama.panoId !== stop.panoId) {
                 console.log(`Found random panorama at attempt ${attempt + 1}`);
                 return panorama;
             }
-            
+
         } catch (error) {
             console.warn(`Search attempt ${attempt + 1} failed:`, error);
         }
-        
+
         // Small delay between attempts
         await new Promise(resolve => setTimeout(resolve, 200));
     }
-    
+
     return null;
 }
 
@@ -912,7 +911,7 @@ async function findNearbyPanorama(stop, radius) {
 async function searchPanoramaAtLocation(position, radius) {
     return new Promise((resolve) => {
         const timeoutId = setTimeout(() => resolve(null), 5000);
-        
+
         streetViewService.getPanorama({
             location: position,
             radius: radius,
@@ -920,7 +919,7 @@ async function searchPanoramaAtLocation(position, radius) {
             preference: google.maps.StreetViewPreference.NEAREST
         }, (data, status) => {
             clearTimeout(timeoutId);
-            
+
             if (status === 'OK' && data?.location) {
                 resolve({
                     panoId: data.location.pano,
@@ -941,7 +940,7 @@ function returnToMainTour() {
     } else if (currentStopIndex < tourItinerary.length) {
         moveToLocation(tourItinerary[currentStopIndex]);
     }
-    
+
     tourState.endExploring();
 }
 
@@ -949,9 +948,9 @@ function returnToMainTour() {
 async function completeTour() {
     tourState.complete();
     stopSpeech();
-    
+
     setLoading(true, 'Creating your photo gallery...');
-    
+
     try {
         await showFinalGallery(currentDestination);
     } catch (error) {
@@ -965,13 +964,13 @@ async function completeTour() {
 function resetTourState() {
     stopSpeech();
     if (localTimeInterval) clearInterval(localTimeInterval);
-    
+
     tourState.reset();
     destinationTimezone = null;
     currentStopIndex = 0;
     exploreLocation = null;
     tourItinerary = [];
-    
+
     // Clear location cache for fresh processing
     if (locationProcessor) {
         locationProcessor.clearCache();
@@ -984,14 +983,14 @@ function resetUI() {
     toggleVisibility(addressLabel, false);
     toggleVisibility(controlsContainer, false);
     toggleVisibility(tourInfoContainer, false);
-    
+
     if (streetView) streetView.setVisible(false);
-    
+
     destinationInput.value = '';
     generateTourButton.disabled = false;
     generateTourButton.textContent = 'Generate Tour';
     toggleVisibility(tourSetupContainer, true);
-    
+
     if (galleryGrid) galleryGrid.innerHTML = '';
     setLoading(false);
 }
@@ -1021,15 +1020,15 @@ function positionControls() {
 async function fetchItinerary(destination, focus) {
     const prompt = `
         Create a 5-stop virtual tour itinerary for "${destination}" with focus on "${focus}".
-        
+
         For each stop, provide:
         1. "locationName": Specific landmark/attraction name
         2. "briefDescription": One engaging sentence about this location
-        
+
         Ensure locations are well-known, publicly accessible places with Street View coverage.
-        
+
         Respond with ONLY a valid JSON array.
-        
+
         Example:
         [
             {
@@ -1038,7 +1037,7 @@ async function fetchItinerary(destination, focus) {
             }
         ]
     `;
-    
+
     try {
         const response = await fetch(GEMINI_API_URL, {
             method: 'POST',
@@ -1051,20 +1050,20 @@ async function fetchItinerary(destination, focus) {
                 }
             }),
         });
-        
+
         if (!response.ok) {
             throw new Error(`API Error: ${response.status}`);
         }
-        
+
         const data = await response.json();
         const itinerary = JSON.parse(data.candidates[0].content.parts[0].text);
-        
+
         if (!Array.isArray(itinerary) || itinerary.length === 0) {
             throw new Error("Invalid itinerary format");
         }
-        
+
         return itinerary;
-        
+
     } catch (error) {
         console.error('Failed to fetch itinerary:', error);
         throw new Error(`Could not generate tour: ${error.message}`);
@@ -1074,39 +1073,39 @@ async function fetchItinerary(destination, focus) {
 // --- 15. GALLERY FUNCTIONS (Simplified for reliability) ---
 async function showFinalGallery(destination) {
     hideAllTourUI();
-    
+
     try {
         const [images, videos, localInfo] = await Promise.all([
             fetchImages(destination).catch(() => []),
             fetchVideos(destination).catch(() => []),
             fetchLocalInfo(destination).catch(() => ({ weather: { text: 'Unavailable', emoji: '❔' }, timezone: null }))
         ]);
-        
+
         if (localInfo.timezone) {
             destinationTimezone = localInfo.timezone;
             updateLocalTime(localTime);
         } else {
             localTime.textContent = new Date().toLocaleTimeString();
         }
-        
+
         if (localInfo.weather) {
             localWeather.textContent = `${localInfo.weather.emoji} ${localInfo.weather.text}`;
         }
-        
+
         fetchNewsOutlets(destination).then(news => {
             populateNews(news, localNews);
         }).catch(() => {
             localNews.innerHTML = '<p class="text-slate-400">News unavailable</p>';
         });
-        
+
         const galleryItems = [...images, ...videos];
         galleryItems.sort(() => Math.random() - 0.5);
-        
+
         populateGalleryGrid(galleryItems, destination);
-        
+
         setLoading(false);
         toggleVisibility(galleryContainer, true);
-        
+
     } catch (error) {
         console.error("Gallery creation failed:", error);
         setLoading(false);
@@ -1118,7 +1117,7 @@ async function showFinalGallery(destination) {
 
 async function fetchLocalInfo(query) {
     const prompt = `Provide local information for ${query}. Respond with JSON containing "weather" (object with "temp_c", "temp_f", "condition") and "timezone" (IANA timezone).`;
-    
+
     try {
         const response = await fetch(GEMINI_API_URL, {
             method: 'POST',
@@ -1128,15 +1127,15 @@ async function fetchLocalInfo(query) {
                 generationConfig: { temperature: 0, response_mime_type: "application/json" }
             }),
         });
-        
+
         if (!response.ok) throw new Error('Local info request failed');
-        
+
         const data = await response.json();
         const info = JSON.parse(data.candidates[0].content.parts[0].text);
-        
+
         let weatherText = 'Unavailable';
         let weatherEmoji = '❔';
-        
+
         if (info.weather && info.weather.condition) {
             const condition = info.weather.condition.toLowerCase();
             if (condition.includes('sun') || condition.includes('clear')) weatherEmoji = '☀️';
@@ -1145,15 +1144,15 @@ async function fetchLocalInfo(query) {
             else if (condition.includes('storm')) weatherEmoji = '⛈️';
             else if (condition.includes('snow')) weatherEmoji = '❄️';
             else if (condition.includes('fog')) weatherEmoji = '🌫️';
-            
+
             weatherText = `${info.weather.temp_f}°F / ${info.weather.temp_c}°C, ${info.weather.condition}`;
         }
-        
+
         return {
             weather: { text: weatherText, emoji: weatherEmoji },
             timezone: info.timezone || null
         };
-        
+
     } catch (error) {
         return { weather: { text: 'Unavailable', emoji: '❔' }, timezone: null };
     }
@@ -1161,14 +1160,14 @@ async function fetchLocalInfo(query) {
 
 async function fetchImages(query) {
     const url = `${CUSTOM_SEARCH_API_URL}?key=${GOOGLE_API_KEY}&cx=${CUSTOM_SEARCH_ENGINE_ID}&q=${encodeURIComponent(query)}&searchType=image&num=8`;
-    
+
     try {
         const response = await fetch(url);
         if (!response.ok) throw new Error('Image search failed');
-        
+
         const data = await response.json();
         return data.items ? data.items.map(item => ({ type: 'image', url: item.link })) : [];
-        
+
     } catch (error) {
         return [];
     }
@@ -1176,14 +1175,14 @@ async function fetchImages(query) {
 
 async function fetchVideos(query) {
     const url = `${YOUTUBE_API_URL}?key=${YOUTUBE_API_KEY}&part=snippet&q=${encodeURIComponent(query + " tour")}&type=video&maxResults=4&videoEmbeddable=true`;
-    
+
     try {
         const response = await fetch(url);
         if (!response.ok) throw new Error('YouTube search failed');
-        
+
         const data = await response.json();
         return data.items ? data.items.map(item => ({ type: 'video', videoId: item.id.videoId })) : [];
-        
+
     } catch (error) {
         return [];
     }
@@ -1191,7 +1190,7 @@ async function fetchVideos(query) {
 
 async function fetchNewsOutlets(query) {
     const prompt = `List 3-4 major local news outlets for ${query}. Respond with JSON array of objects with "name" and "url" properties.`;
-    
+
     try {
         const response = await fetch(GEMINI_API_URL, {
             method: 'POST',
@@ -1201,12 +1200,12 @@ async function fetchNewsOutlets(query) {
                 generationConfig: { temperature: 0.2, response_mime_type: "application/json" }
             }),
         });
-        
+
         if (!response.ok) throw new Error('News request failed');
-        
+
         const data = await response.json();
         return JSON.parse(data.candidates[0].content.parts[0].text);
-        
+
     } catch (error) {
         return [];
     }
@@ -1214,12 +1213,12 @@ async function fetchNewsOutlets(query) {
 
 function populateNews(newsItems, element) {
     element.innerHTML = '';
-    
+
     if (!newsItems || newsItems.length === 0) {
         element.innerHTML = '<p class="text-slate-400">No news outlets found.</p>';
         return;
     }
-    
+
     newsItems.forEach(item => {
         const link = document.createElement('a');
         link.href = item.url;
@@ -1234,16 +1233,16 @@ function populateNews(newsItems, element) {
 function populateGalleryGrid(items, destination) {
     galleryTitle.textContent = `Tour Complete: ${destination}`;
     galleryGrid.innerHTML = '';
-    
+
     if (!items || items.length === 0) {
         galleryGrid.innerHTML = `<p class="text-slate-400 col-span-full text-center">No gallery content available.</p>`;
         return;
     }
-    
+
     items.forEach(item => {
         const div = document.createElement('div');
         div.className = 'block aspect-video bg-slate-800 rounded-lg overflow-hidden shadow-lg border-2 border-slate-700 hover:border-cyan-400 transition-all';
-        
+
         if (item.type === 'image') {
             const img = document.createElement('img');
             img.src = item.url;
@@ -1260,7 +1259,7 @@ function populateGalleryGrid(items, destination) {
             iframe.allowFullscreen = true;
             div.appendChild(iframe);
         }
-        
+
         galleryGrid.appendChild(div);
     });
 }
@@ -1486,7 +1485,7 @@ function displayMessages(messages) {
     messages.forEach(message => {
         const messageDiv = document.createElement('div');
         messageDiv.className = 'bg-slate-800 p-3 rounded-lg border border-slate-700';
-        
+
         const isCurrentUser = currentUser && message.userId === currentUser.uid;
         if (isCurrentUser) {
             messageDiv.classList.add('ml-8', 'bg-cyan-900', 'border-cyan-700');
@@ -1495,7 +1494,7 @@ function displayMessages(messages) {
         }
 
         const timestamp = message.timestamp ? new Date(message.timestamp.seconds * 1000).toLocaleTimeString() : 'now';
-        
+
         messageDiv.innerHTML = `
             <div class="flex items-center gap-2 mb-1">
                 ${message.userPhoto ? `<img src="${message.userPhoto}" class="w-6 h-6 rounded-full" alt="${message.userName}">` : ''}
