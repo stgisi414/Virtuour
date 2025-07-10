@@ -1,8 +1,21 @@
 // --- 1. API KEY AND ENDPOINT CONFIGURATION ---
-const GEMINI_API_KEY = 'AIzaSyDtLyUB-2wocE-uNG5e3pwNFArjn1GVTco';
-const GOOGLE_API_KEY = 'AIzaSyCYxnWpHNlzAz5h2W3pGTaW_oIP1ukTs1Y';
+// Get API keys from environment variables (Replit Secrets)
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
 const YOUTUBE_API_KEY = GOOGLE_API_KEY;
-const CUSTOM_SEARCH_ENGINE_ID = '16b67ee3373714c2b';
+const CUSTOM_SEARCH_ENGINE_ID = process.env.CUSTOM_SEARCH_ENGINE_ID;
+
+// Validate that required environment variables are set
+if (!GEMINI_API_KEY) {
+    console.error('GEMINI_API_KEY not found in environment variables');
+}
+if (!GOOGLE_API_KEY) {
+    console.error('GOOGLE_API_KEY not found in environment variables');
+}
+if (!CUSTOM_SEARCH_ENGINE_ID) {
+    console.error('CUSTOM_SEARCH_ENGINE_ID not found in environment variables');
+}
+
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 const YOUTUBE_API_URL = 'https://www.googleapis.com/youtube/v3/search';
 const CUSTOM_SEARCH_API_URL = 'https://www.googleapis.com/customsearch/v1';

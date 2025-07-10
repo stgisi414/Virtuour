@@ -21,9 +21,20 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // API Configuration
 const GOOGLE_TTS_KEY = process.env.GOOGLE_TTS_KEY; // Service account key JSON as string
-const GOOGLE_GEMINI_KEY = process.env.GOOGLE_GEMINI_KEY || 'AIzaSyDtLyUB-2wocE-uNG5e3pwNFArjn1GVTco';
-const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY || 'AIzaSyCYxnWpHNlzAz5h2W3pGTaW_oIP1ukTs1Y';
-const CUSTOM_SEARCH_ENGINE_ID = process.env.CUSTOM_SEARCH_ENGINE_ID || '16b67ee3373714c2b';
+const GOOGLE_GEMINI_KEY = process.env.GEMINI_API_KEY;
+const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
+const CUSTOM_SEARCH_ENGINE_ID = process.env.CUSTOM_SEARCH_ENGINE_ID;
+
+// Validate that required environment variables are set
+if (!GOOGLE_GEMINI_KEY) {
+    console.error('GEMINI_API_KEY not found in environment variables');
+}
+if (!GOOGLE_API_KEY) {
+    console.error('GOOGLE_API_KEY not found in environment variables');
+}
+if (!CUSTOM_SEARCH_ENGINE_ID) {
+    console.error('CUSTOM_SEARCH_ENGINE_ID not found in environment variables');
+}
 
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GOOGLE_GEMINI_KEY}`;
 const YOUTUBE_API_URL = 'https://www.googleapis.com/youtube/v3/search';
