@@ -12,13 +12,8 @@ import {
   doc,
   setDoc,
   getDoc,
-  getDocs,
-  updateDoc,
-  deleteDoc,
-  arrayUnion,
-  arrayRemove,
-  Timestamp
-} from 'firebase/firestore';
+  getDocs
+} from './firebase-config.js';
 
 class ChatroomService {
   constructor() {

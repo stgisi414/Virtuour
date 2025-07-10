@@ -21,7 +21,12 @@ import {
   doc,
   setDoc,
   getDoc,
-  getDocs
+  getDocs,
+  updateDoc,
+  deleteDoc,
+  arrayUnion,
+  arrayRemove,
+  Timestamp
 } from 'https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js';
 
 console.log('🔥 FIREBASE CONFIG: Starting Firebase configuration...');
@@ -75,7 +80,12 @@ export {
   doc,
   setDoc,
   getDoc,
-  getDocs
+  getDocs,
+  updateDoc,
+  deleteDoc,
+  arrayUnion,
+  arrayRemove,
+  Timestamp
 };
 
 console.log('🔥 FIREBASE CONFIG: All Firebase services initialized successfully');
