@@ -5,6 +5,7 @@
   "description": "AI Virtual Tour Guide with Google Cloud TTS",
   "main": "server.js",
   "scripts": {
+    "build": "echo 'No build step required'",
     "start": "node server.js",
     "dev": "nodemon server.js"
   },
