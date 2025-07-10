@@ -764,6 +764,7 @@ async function initializeTourUI() {
 }
 
 function updateControlsForTouring() {
+    areaChatButton.style.display = 'none';
     exploreButton.style.display = 'none';
     returnToTourButton.style.display = 'none';
     pauseTourButton.style.display = 'flex';
@@ -774,6 +775,7 @@ function updateControlsForTouring() {
 }
 
 function updateControlsForPaused() {
+    areaChatButton.style.display = 'flex';
     exploreButton.style.display = 'flex';
     returnToTourButton.style.display = 'none';
     pauseTourButton.style.display = 'flex';
@@ -790,6 +792,7 @@ function updateControlsForPaused() {
 }
 
 function updateControlsForExploring() {
+    areaChatButton.style.display = 'none';
     exploreButton.style.display = 'none';
     returnToTourButton.style.display = 'flex';
     pauseTourButton.style.display = 'none';
@@ -1340,21 +1343,25 @@ emailAuthModal.addEventListener('click', (e) => {
 
 console.log('Tour application with Google Cloud TTS loaded successfully');
 // --- 18. CHAT INTEGRATION ---
-// TODO: Implement chat integration here
-// This will include:
-// 1. Socket.IO setup
-// 2. Fetching/creating chatrooms based on Google Places API location IDs
-// 3. Handling message sending and receiving
-// 4. UI updates for chat display
+import chatroomService from './chatroom-service.js';
 
 const areaChatButton = document.getElementById('area-chat-button');
+const chatroomModal = document.getElementById('chatroom-modal');
+const closeChatroomButton = document.getElementById('close-chatroom');
+const chatroomTitle = document.getElementById('chatroom-title');
+const chatroomMessages = document.getElementById('chatroom-messages');
+const chatroomInputSection = document.getElementById('chatroom-input-section');
+const authRequiredMessage = document.getElementById('auth-required-message');
+
+let currentChatroomId = null;
+let messageInput = null;
+let sendButton = null;
 
 // Function to open the chat for the current location
 async function openAreaChat() {
     if (tourState.state !== 'paused' || currentStopIndex >= tourItinerary.length) return;
 
     const currentStop = tourItinerary[currentStopIndex];
-    // Use placeId from Google Places API as the chatroom ID
     const chatroomId = currentStop.placeId;
 
     if (!chatroomId) {
@@ -1362,14 +1369,162 @@ async function openAreaChat() {
         return;
     }
 
-    // TODO: Implement the actual chat opening logic here
-    // This could involve:
-    // 1. Connecting to the Socket.IO server
-    // 2. Joining the chatroom with the ID `chatroomId`
-    // 3. Displaying the chat UI
+    const user = authService.getCurrentUser();
+    if (!user) {
+        showToast('Please sign in to access area chat', 'error');
+        return;
+    }
 
-    showToast(`Opening chat for ${currentStop.locationName} (Chatroom ID: ${chatroomId}) - Feature under development`, 'info');
+    try {
+        currentChatroomId = chatroomId;
+        chatroomTitle.textContent = `${currentStop.locationName} Chat`;
+        
+        // Show modal
+        chatroomModal.classList.remove('hidden');
+        
+        // Setup chatroom
+        await chatroomService.getChatroom(chatroomId, currentStop.locationName);
+        
+        // Setup message input if user is authenticated
+        setupMessageInput(user);
+        
+        // Subscribe to messages
+        chatroomService.subscribeToMessages(chatroomId, displayMessages);
+        
+        showToast(`Joined ${currentStop.locationName} chat`, 'success');
+        
+    } catch (error) {
+        console.error('Error opening area chat:', error);
+        showToast('Failed to open area chat', 'error');
+    }
 }
 
-// Event listener for the area chat button
+function setupMessageInput(user) {
+    authRequiredMessage.classList.add('hidden');
+    
+    // Create message input if it doesn't exist
+    if (!messageInput) {
+        const inputContainer = document.createElement('div');
+        inputContainer.className = 'flex gap-2';
+        
+        messageInput = document.createElement('input');
+        messageInput.type = 'text';
+        messageInput.placeholder = 'Type your message...';
+        messageInput.className = 'flex-1 bg-slate-700 text-white px-3 py-2 rounded border border-slate-600 focus:border-cyan-400 focus:outline-none';
+        
+        sendButton = document.createElement('button');
+        sendButton.textContent = 'Send';
+        sendButton.className = 'bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold px-4 py-2 rounded transition-colors';
+        
+        inputContainer.appendChild(messageInput);
+        inputContainer.appendChild(sendButton);
+        chatroomInputSection.appendChild(inputContainer);
+        
+        // Event listeners
+        sendButton.addEventListener('click', sendMessage);
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+    }
+}
+
+async function sendMessage() {
+    if (!messageInput || !currentChatroomId) return;
+    
+    const messageText = messageInput.value.trim();
+    if (!messageText) return;
+    
+    const user = authService.getCurrentUser();
+    if (!user) {
+        showToast('Please sign in to send messages', 'error');
+        return;
+    }
+    
+    try {
+        await chatroomService.sendMessage(currentChatroomId, messageText, user);
+        messageInput.value = '';
+    } catch (error) {
+        console.error('Error sending message:', error);
+        showToast('Failed to send message', 'error');
+    }
+}
+
+function displayMessages(messages) {
+    chatroomMessages.innerHTML = '';
+    
+    if (messages.length === 0) {
+        const emptyState = document.createElement('div');
+        emptyState.className = 'text-center text-gray-400 py-8';
+        emptyState.textContent = 'No messages yet. Be the first to say hello!';
+        chatroomMessages.appendChild(emptyState);
+        return;
+    }
+    
+    messages.forEach(message => {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'flex items-start gap-3 p-2 hover:bg-slate-800 rounded';
+        
+        const avatar = document.createElement('img');
+        avatar.src = message.userPhoto || 'https://via.placeholder.com/32';
+        avatar.className = 'w-8 h-8 rounded-full flex-shrink-0';
+        avatar.alt = message.userName;
+        
+        const content = document.createElement('div');
+        content.className = 'flex-1 min-w-0';
+        
+        const header = document.createElement('div');
+        header.className = 'flex items-center gap-2 mb-1';
+        
+        const userName = document.createElement('span');
+        userName.className = 'font-semibold text-cyan-400 text-sm';
+        userName.textContent = message.userName;
+        
+        const timestamp = document.createElement('span');
+        timestamp.className = 'text-xs text-gray-500';
+        if (message.timestamp) {
+            const date = message.timestamp.toDate ? message.timestamp.toDate() : new Date(message.timestamp);
+            timestamp.textContent = date.toLocaleTimeString();
+        }
+        
+        const messageText = document.createElement('div');
+        messageText.className = 'text-gray-200 text-sm break-words';
+        messageText.textContent = message.text;
+        
+        header.appendChild(userName);
+        header.appendChild(timestamp);
+        content.appendChild(header);
+        content.appendChild(messageText);
+        
+        messageDiv.appendChild(avatar);
+        messageDiv.appendChild(content);
+        chatroomMessages.appendChild(messageDiv);
+    });
+    
+    // Scroll to bottom
+    chatroomMessages.scrollTop = chatroomMessages.scrollHeight;
+}
+
+function closeChatroom() {
+    chatroomModal.classList.add('hidden');
+    
+    if (currentChatroomId) {
+        chatroomService.unsubscribeFromMessages(currentChatroomId);
+        currentChatroomId = null;
+    }
+    
+    // Clear messages
+    chatroomMessages.innerHTML = '';
+}
+
+// Event listeners
 areaChatButton.addEventListener('click', openAreaChat);
+closeChatroomButton.addEventListener('click', closeChatroom);
+
+// Close modal when clicking outside
+chatroomModal.addEventListener('click', (e) => {
+    if (e.target === chatroomModal) {
+        closeChatroom();
+    }
+});
