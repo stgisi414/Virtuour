@@ -1,6 +1,6 @@
 
-import { db } from './firebase-config.js';
 import { 
+  db,
   collection, 
   addDoc, 
   query, 
@@ -12,7 +12,12 @@ import {
   doc,
   setDoc,
   getDoc,
-  getDocs
+  getDocs,
+  updateDoc,
+  deleteDoc,
+  arrayUnion,
+  arrayRemove,
+  Timestamp
 } from './firebase-config.js';
 
 class ChatroomService {
