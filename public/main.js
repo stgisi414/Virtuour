@@ -1019,6 +1019,7 @@ async function showFinalGallery(destination) {
 
     } catch (error) {
         console.error("Gallery creation failed:", error);
+        ```text
         setLoading(false);
         galleryTitle.textContent = `Tour Complete: ${destination}`;
         galleryGrid.innerHTML = '<p class="text-slate-400 col-span-full text-center">Gallery content unavailable</p>';
@@ -1212,7 +1213,7 @@ document.addEventListener('keydown', (e) => {
     if (!chatroomModal.classList.contains('hidden')) {
         return;
     }
-    
+
     if (tourState.state === 'paused') {
         if (e.key === ' ' || e.key === 'Enter') {
             e.preventDefault();
@@ -1317,8 +1318,45 @@ logoutBtn.addEventListener('click', async () => {
     }
 });
 
-// Listen for authentication state changes
+// Authentication state handling
 authService.onAuthStateChanged((user) => {
+    console.log('Auth state changed:', user ? 'User signed in' : 'User signed out');
+
+    if (user) {
+        console.log('User details:', {
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName
+        });
+
+        // Update UI for signed-in user
+        updateAuthUI(user);
+
+        // If chatroom is open, refresh the UI
+        if (!chatroomModal.classList.contains('hidden') && currentChatroomId) {
+            setTimeout(async () => {
+                try {
+                    const chatroomData = await chatroomService.getChatroomData(currentChatroomId);
+                    setupMessageInput(user, chatroomData);
+                } catch (error) {
+                    console.error('Error refreshing chatroom UI:', error);
+                }
+            }, 500);
+        }
+    } else {
+        console.log('User signed out');
+        // Update UI for signed-out user
+        updateAuthUI(null);
+
+        // Close any open chatrooms
+        if (!chatroomModal.classList.contains('hidden')) {
+            closeAreaChat();
+        }
+    }
+});
+
+// Function to update authentication UI
+function updateAuthUI(user) {
     if (user) {
         // User is signed in
         userInfo.classList.remove('hidden');
@@ -1327,17 +1365,13 @@ authService.onAuthStateChanged((user) => {
 
         userName.textContent = user.displayName || user.email || 'User';
         userAvatar.src = user.photoURL || 'https://via.placeholder.com/32';
-
-        console.log('User signed in:', user);
     } else {
         // User is signed out
         userInfo.classList.add('hidden');
         userInfo.classList.remove('flex');
         authButtons.classList.remove('hidden');
-
-        console.log('User signed out');
     }
-});
+}
 
 // Close modal when clicking outside
 emailAuthModal.addEventListener('click', (e) => {
@@ -1367,25 +1401,25 @@ let sendButton = null;
 // Function to normalize destination for consistent chat room ID
 function normalizeDestinationForChat(destination) {
     if (!destination || typeof destination !== 'string') return null;
-    
+
     // Convert to lowercase and remove common suffixes
     let normalized = destination.toLowerCase().trim();
-    
+
     if (normalized.length === 0) return null;
-    
+
     // Remove country suffixes
     normalized = normalized.replace(/,?\s*(south korea|korea|japan|china|usa|united states|uk|united kingdom|france|germany|italy|spain)$/i, '');
-    
+
     // Remove state/province suffixes for major cities
     normalized = normalized.replace(/,?\s*(seoul|tokyo|beijing|new york|california|london|paris|berlin)$/i, '');
-    
+
     // Extract the main area name (first part before comma)
     const parts = normalized.split(',');
     normalized = parts[0].trim();
-    
+
     // Replace spaces with underscores and remove special characters
     normalized = normalized.replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
-    
+
     // Ensure minimum length
     if (normalized.length < 3) {
         // If too short, try using the original input with basic cleaning
@@ -1394,7 +1428,7 @@ function normalizeDestinationForChat(destination) {
             .replace(/[^a-z0-9_]/g, '')
             .substring(0, 50);
     }
-    
+
     return normalized.length >= 3 ? normalized : null;
 }
 
@@ -1412,18 +1446,18 @@ async function getProperDestinationName(userInput) {
         });
 
         const result = geocodeResults[0];
-        
+
         // Check if the user input appears in the formatted address
         // If so, try to preserve the specific area name they requested
         const userInputLower = userInput.toLowerCase().trim();
         const formattedAddressLower = result.formatted_address.toLowerCase();
-        
+
         // Look for specific area/district/neighborhood types first
         let specificAreaName = '';
         for (const component of result.address_components) {
             const componentName = component.long_name.toLowerCase();
             const componentTypes = component.types;
-            
+
             // Check if this component matches the user input and is a specific area
             if (componentName.includes(userInputLower) || userInputLower.includes(componentName)) {
                 if (componentTypes.includes('sublocality') || 
@@ -1437,12 +1471,12 @@ async function getProperDestinationName(userInput) {
                 }
             }
         }
-        
+
         // If we found a specific area name, use it
         if (specificAreaName) {
             return specificAreaName;
         }
-        
+
         // If the user input is contained in the formatted address, try to preserve it
         if (formattedAddressLower.includes(userInputLower)) {
             // Capitalize the user input properly
@@ -1450,7 +1484,7 @@ async function getProperDestinationName(userInput) {
                 .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
                 .join(' ');
         }
-        
+
         // Fallback to extracting from address components
         let cityName = '';
         for (const component of result.address_components) {
@@ -1464,7 +1498,7 @@ async function getProperDestinationName(userInput) {
 
         // Return the properly formatted name
         return cityName || result.formatted_address.split(',')[0];
-        
+
     } catch (error) {
         console.warn('Could not get proper destination name:', error);
         // Fallback: capitalize first letter of each word
@@ -1474,73 +1508,84 @@ async function getProperDestinationName(userInput) {
     }
 }
 
+// Get area chat functionality
+function getAreaChatId() {
+    // Try multiple approaches to determine area
+    if (tourState.currentLocation && tourState.currentLocation.area) {
+        const areaId = tourState.currentLocation.area.toLowerCase().replace(/[^a-zA-Z0-9_-]/g, '-').substring(0, 50);
+        console.log('Using area from tour state:', areaId);
+        return areaId.length >= 3 ? areaId : 'general-seoul';
+    }
+
+    if (tourState.currentLocation && tourState.currentLocation.name) {
+        const areaId = tourState.currentLocation.name.toLowerCase().replace(/[^a-zA-Z0-9_-]/g, '-').substring(0, 50);
+        console.log('Using location name from tour state:', areaId);
+        return areaId.length >= 3 ? areaId : 'general-seoul';
+    }
+
+    // Check URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const areaParam = urlParams.get('area');
+    if (areaParam) {
+        const areaId = areaParam.toLowerCase().replace(/[^a-zA-Z0-9_-]/g, '-').substring(0, 50);
+        console.log('Using area from URL parameter:', areaId);
+        return areaId.length >= 3 ? areaId : 'general-seoul';
+    }
+
+    // Default fallback
+    console.log('No specific area found, using default');
+    return 'general-seoul';
+}
+
 // Function to open the chat for the current location
 async function openAreaChat() {
-    if (tourState.state !== 'paused' || currentStopIndex >= tourItinerary.length) return;
-
-    // Use current destination or fallback to current stop location
-    let destinationForChat = currentDestination;
-    
-    // If currentDestination is not set, try to use the current stop's location
-    if (!destinationForChat && tourItinerary.length > 0 && currentStopIndex < tourItinerary.length) {
-        const currentStop = tourItinerary[currentStopIndex];
-        destinationForChat = currentStop.locationName;
-    }
-    
-    // Further fallback to input value
-    if (!destinationForChat && destinationInput.value.trim()) {
-        destinationForChat = destinationInput.value.trim();
-    }
-
-    const chatroomId = normalizeDestinationForChat(destinationForChat);
-
-    if (!chatroomId) {
-        showToast('Could not determine the area chat ID. Please start a tour first.', 'error');
-        return;
-    }
-
-    const user = authService.getCurrentUser();
-    if (!user) {
-        showToast('Please sign in to access area chat', 'error');
-        return;
-    }
-
     try {
-        currentChatroomId = chatroomId;
-        chatroomTitle.textContent = `${destinationForChat} Area Chat`;
-        
+        // Wait for authentication state to be determined
+        let user = authService.getCurrentUser();
+        if (!user) {
+            // Wait a bit for auth state to load
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            user = authService.getCurrentUser();
+        }
+
+        if (!user) {
+            showToast('Please sign in to join area chat', 'error');
+            return;
+        }
+
+        currentChatroomId = getAreaChatId();
+        console.log('Opening chat for area:', currentChatroomId);
+
+        if (!currentChatroomId) {
+            showToast('Could not determine the area chat ID.', 'error');
+            return;
+        }
+
+        const areaName = tourState.currentLocation?.area || tourState.currentLocation?.name || 'Seoul Area';
+
+        // Get or create chatroom
+        const chatroomRef = await chatroomService.getChatroom(currentChatroomId, areaName, user);
+
         // Show modal
         chatroomModal.classList.remove('hidden');
-        
-        // Setup chatroom
-        await chatroomService.getChatroom(chatroomId, currentDestination, user);
-        
-        // Get chatroom data to check admin status
-        const chatroomData = await chatroomService.getChatroomData(chatroomId);
-        
-        // Setup message input if user is authenticated
-        setupMessageInput(user, chatroomData);
-        
+        chatroomTitle.textContent = `${areaName} Chat`;
+
         // Subscribe to messages
-        chatroomService.subscribeToMessages(chatroomId, (messages) => {
-            displayMessages(messages, chatroomData, user);
-        });
-        
-        showToast(`Joined ${destinationForChat} area chat`, 'success');
-        
+        chatroomService.subscribeToMessages(currentChatroomId, displayMessages);
+
+        // Get chatroom data and setup UI
+        const chatroomData = await chatroomService.getChatroomData(currentChatroomId);
+        setupMessageInput(user, chatroomData);
+
     } catch (error) {
         console.error('Error opening area chat:', error);
-        if (error.message.includes('banned')) {
-            showToast('You are banned from this chatroom', 'error');
-        } else {
-            showToast('Failed to open area chat', 'error');
-        }
+        showToast('Failed to open area chat: ' + error.message, 'error');
     }
 }
 
 function setupMessageInput(user, chatroomData) {
     authRequiredMessage.classList.add('hidden');
-    
+
     // Check if user is banned
     if (chatroomService.isBanned(chatroomData, user.uid)) {
         const bannedMessage = document.createElement('div');
@@ -1550,25 +1595,25 @@ function setupMessageInput(user, chatroomData) {
         chatroomInputSection.appendChild(bannedMessage);
         return;
     }
-    
+
     // Create message input if it doesn't exist
     if (!messageInput) {
         const inputContainer = document.createElement('div');
         inputContainer.className = 'flex gap-2';
-        
+
         messageInput = document.createElement('input');
         messageInput.type = 'text';
         messageInput.placeholder = 'Type your message...';
         messageInput.className = 'flex-1 bg-slate-700 text-white px-3 py-2 rounded border border-slate-600 focus:border-cyan-400 focus:outline-none';
-        
+
         sendButton = document.createElement('button');
         sendButton.textContent = 'Send';
         sendButton.className = 'bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold px-4 py-2 rounded transition-colors';
-        
+
         inputContainer.appendChild(messageInput);
         inputContainer.appendChild(sendButton);
         chatroomInputSection.appendChild(inputContainer);
-        
+
         // Add admin controls if user is admin
         if (chatroomService.isAdmin(chatroomData, user.uid)) {
             const adminNotice = document.createElement('div');
@@ -1576,7 +1621,7 @@ function setupMessageInput(user, chatroomData) {
             adminNotice.textContent = '👑 You are an admin of this chatroom';
             chatroomInputSection.insertBefore(adminNotice, inputContainer);
         }
-        
+
         // Event listeners
         sendButton.addEventListener('click', sendMessage);
         messageInput.addEventListener('keypress', (e) => {
@@ -1588,29 +1633,42 @@ function setupMessageInput(user, chatroomData) {
 }
 
 async function sendMessage() {
-    if (!messageInput || !currentChatroomId) return;
-    
-    const messageText = messageInput.value.trim();
-    if (!messageText) return;
-    
-    const user = authService.getCurrentUser();
-    if (!user) {
-        showToast('Please sign in to send messages', 'error');
-        return;
-    }
-    
     try {
+        const user = authService.getCurrentUser();
+        if (!user) {
+            showToast('Please sign in to send messages', 'error');
+            return;
+        }
+
+        const messageText = messageInput.value.trim();
+        if (!messageText) {
+            showToast('Please enter a message', 'error');
+            return;
+        }
+
+        if (!currentChatroomId) {
+            showToast('No active chatroom', 'error');
+            return;
+        }
+
+        console.log('Sending message:', { messageText, chatroomId: currentChatroomId, user: user.uid });
+
         await chatroomService.sendMessage(currentChatroomId, messageText, user);
         messageInput.value = '';
+        showToast('Message sent!', 'success');
     } catch (error) {
         console.error('Error sending message:', error);
-        showToast('Failed to send message', 'error');
+        let errorMessage = 'Failed to send message';
+        if (error.message) {
+            errorMessage += ': ' + error.message;
+        }
+        showToast(errorMessage, 'error');
     }
 }
 
 function displayMessages(messages, chatroomData, currentUser) {
     chatroomMessages.innerHTML = '';
-    
+
     if (messages.length === 0) {
         const emptyState = document.createElement('div');
         emptyState.className = 'text-center text-gray-400 py-8';
@@ -1618,28 +1676,28 @@ function displayMessages(messages, chatroomData, currentUser) {
         chatroomMessages.appendChild(emptyState);
         return;
     }
-    
+
     const isCurrentUserAdmin = chatroomService.isAdmin(chatroomData, currentUser.uid);
-    
+
     messages.forEach(message => {
         const messageDiv = document.createElement('div');
         messageDiv.className = 'flex items-start gap-3 p-2 hover:bg-slate-800 rounded group';
-        
+
         const avatar = document.createElement('img');
         avatar.src = message.userPhoto || 'https://via.placeholder.com/32';
         avatar.className = 'w-8 h-8 rounded-full flex-shrink-0';
         avatar.alt = message.userName;
-        
+
         const content = document.createElement('div');
         content.className = 'flex-1 min-w-0';
-        
+
         const header = document.createElement('div');
         header.className = 'flex items-center gap-2 mb-1';
-        
+
         const userName = document.createElement('span');
         userName.className = 'font-semibold text-cyan-400 text-sm';
         userName.textContent = message.userName;
-        
+
         // Add admin badges
         if (chatroomService.isMasterAdmin(chatroomData, message.userId)) {
             const masterAdminBadge = document.createElement('span');
@@ -1654,14 +1712,14 @@ function displayMessages(messages, chatroomData, currentUser) {
             adminBadge.title = 'Admin';
             header.appendChild(adminBadge);
         }
-        
+
         const timestamp = document.createElement('span');
         timestamp.className = 'text-xs text-gray-500';
         if (message.timestamp) {
             const date = message.timestamp.toDate ? message.timestamp.toDate() : new Date(message.timestamp);
             timestamp.textContent = date.toLocaleTimeString();
         }
-        
+
         // Add expiry info
         if (message.expiresAt) {
             const expiryDate = message.expiresAt.toDate ? message.expiresAt.toDate() : new Date(message.expiresAt);
@@ -1671,42 +1729,42 @@ function displayMessages(messages, chatroomData, currentUser) {
             expirySpan.textContent = `(${timeLeft}h left)`;
             timestamp.appendChild(expirySpan);
         }
-        
+
         const messageText = document.createElement('div');
         messageText.className = 'text-gray-200 text-sm break-words';
         messageText.textContent = message.text;
-        
+
         header.appendChild(userName);
         header.appendChild(timestamp);
         content.appendChild(header);
         content.appendChild(messageText);
-        
+
         messageDiv.appendChild(avatar);
         messageDiv.appendChild(content);
-        
+
         // Add admin controls if current user is admin
         if (isCurrentUserAdmin && message.userId !== currentUser.uid) {
             const adminControls = document.createElement('div');
             adminControls.className = 'hidden group-hover:flex flex-col gap-1 ml-2';
-            
+
             const deleteBtn = document.createElement('button');
             deleteBtn.className = 'text-xs bg-red-600 hover:bg-red-500 text-white px-2 py-1 rounded';
             deleteBtn.textContent = '🗑️';
             deleteBtn.title = 'Delete message';
             deleteBtn.onclick = () => deleteMessage(message.id);
-            
+
             const banBtn = document.createElement('button');
             banBtn.className = 'text-xs bg-red-800 hover:bg-red-700 text-white px-2 py-1 rounded';
             banBtn.textContent = '🚫';
             banBtn.title = 'Ban user';
             banBtn.onclick = () => banUser(message.userId, message.userName);
-            
+
             const kickBtn = document.createElement('button');
             kickBtn.className = 'text-xs bg-orange-600 hover:bg-orange-500 text-white px-2 py-1 rounded';
             kickBtn.textContent = '👢';
             kickBtn.title = 'Kick user (10 min)';
             kickBtn.onclick = () => kickUser(message.userId, message.userName);
-            
+
             if (!chatroomService.isAdmin(chatroomData, message.userId)) {
                 const promoteBtn = document.createElement('button');
                 promoteBtn.className = 'text-xs bg-yellow-600 hover:bg-yellow-500 text-white px-2 py-1 rounded';
@@ -1722,7 +1780,7 @@ function displayMessages(messages, chatroomData, currentUser) {
                 demoteBtn.onclick = () => demoteAdmin(message.userId, message.userName);
                 adminControls.appendChild(demoteBtn);
             }
-            
+
             // Master admin controls (only for master admins)
             if (chatroomService.isMasterAdmin(chatroomData, currentUser.uid)) {
                 if (!chatroomService.isMasterAdmin(chatroomData, message.userId)) {
@@ -1741,44 +1799,44 @@ function displayMessages(messages, chatroomData, currentUser) {
                     adminControls.appendChild(masterDemoteBtn);
                 }
             }
-            
+
             adminControls.appendChild(deleteBtn);
             adminControls.appendChild(banBtn);
             adminControls.appendChild(kickBtn);
-            
+
             messageDiv.appendChild(adminControls);
         }
-        
+
         chatroomMessages.appendChild(messageDiv);
     });
-    
+
     // Scroll to bottom
     chatroomMessages.scrollTop = chatroomMessages.scrollHeight;
 }
 
-function closeChatroom() {
+function closeAreaChat() {
     chatroomModal.classList.add('hidden');
-    
+
     if (currentChatroomId) {
         chatroomService.unsubscribeFromMessages(currentChatroomId);
         currentChatroomId = null;
     }
-    
+
     // Clear messages
     chatroomMessages.innerHTML = '';
 }
 
 // Event listeners
 areaChatButton.addEventListener('click', openAreaChat);
-closeChatroomButton.addEventListener('click', closeChatroom);
+closeChatroomButton.addEventListener('click', closeAreaChat);
 
 // Admin action functions
 async function deleteMessage(messageId) {
     if (!currentChatroomId) return;
-    
+
     const user = authService.getCurrentUser();
     if (!user) return;
-    
+
     try {
         await chatroomService.deleteMessage(currentChatroomId, messageId, user);
         showToast('Message deleted', 'success');
@@ -1790,10 +1848,10 @@ async function deleteMessage(messageId) {
 
 async function banUser(userId, userName) {
     if (!currentChatroomId) return;
-    
+
     const user = authService.getCurrentUser();
     if (!user) return;
-    
+
     if (confirm(`Ban ${userName} from this chatroom?`)) {
         try {
             await chatroomService.banUser(currentChatroomId, userId, user);
@@ -1807,10 +1865,10 @@ async function banUser(userId, userName) {
 
 async function kickUser(userId, userName) {
     if (!currentChatroomId) return;
-    
+
     const user = authService.getCurrentUser();
     if (!user) return;
-    
+
     if (confirm(`Kick ${userName} for 10 minutes?`)) {
         try {
             await chatroomService.kickUser(currentChatroomId, userId, user);
@@ -1824,10 +1882,10 @@ async function kickUser(userId, userName) {
 
 async function promoteToAdmin(userId, userName) {
     if (!currentChatroomId) return;
-    
+
     const user = authService.getCurrentUser();
     if (!user) return;
-    
+
     if (confirm(`Make ${userName} an admin of this chatroom?`)) {
         try {
             await chatroomService.promoteToAdmin(currentChatroomId, userId, user);
@@ -1841,10 +1899,10 @@ async function promoteToAdmin(userId, userName) {
 
 async function promoteToMasterAdmin(userId, userName) {
     if (!currentChatroomId) return;
-    
+
     const user = authService.getCurrentUser();
     if (!user) return;
-    
+
     if (confirm(`Make ${userName} a MASTER ADMIN of this chatroom? This gives them full control over all admins and settings.`)) {
         try {
             await chatroomService.promoteToMasterAdmin(currentChatroomId, userId, user);
@@ -1858,10 +1916,10 @@ async function promoteToMasterAdmin(userId, userName) {
 
 async function demoteMasterAdmin(userId, userName) {
     if (!currentChatroomId) return;
-    
+
     const user = authService.getCurrentUser();
     if (!user) return;
-    
+
     if (confirm(`Remove ${userName} as master admin?`)) {
         try {
             await chatroomService.demoteMasterAdmin(currentChatroomId, userId, user);
@@ -1875,10 +1933,10 @@ async function demoteMasterAdmin(userId, userName) {
 
 async function demoteAdmin(userId, userName) {
     if (!currentChatroomId) return;
-    
+
     const user = authService.getCurrentUser();
     if (!user) return;
-    
+
     if (confirm(`Remove ${userName} as admin?`)) {
         try {
             await chatroomService.demoteAdmin(currentChatroomId, userId, user);
@@ -1895,6 +1953,6 @@ async function demoteAdmin(userId, userName) {
 // Close modal when clicking outside
 chatroomModal.addEventListener('click', (e) => {
     if (e.target === chatroomModal) {
-        closeChatroom();
+        closeAreaChat();
     }
 });
