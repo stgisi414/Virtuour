@@ -1208,6 +1208,11 @@ destinationInput.addEventListener('input', (e) => {
 });
 
 document.addEventListener('keydown', (e) => {
+    // Don't trigger tour controls if chat modal is open
+    if (!chatroomModal.classList.contains('hidden')) {
+        return;
+    }
+    
     if (tourState.state === 'paused') {
         if (e.key === ' ' || e.key === 'Enter') {
             e.preventDefault();
