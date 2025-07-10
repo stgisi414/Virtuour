@@ -1,57 +1,9 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Chatroom rules
-    match /chatrooms/{chatroomId} {
-      allow read: if request.auth != null;
-
-      allow create: if request.auth != null &&
-        // Basic validation to prevent abuse
-        request.resource.data.keys().hasAll(['areaId', 'areaName', 'createdAt', 'createdBy']) &&
-        request.resource.data.areaId == chatroomId &&
-        request.resource.data.createdBy == request.auth.uid &&
-        // Prevent arbitrary chatroom IDs - must match specific pattern
-        chatroomId.matches('^[a-zA-Z0-9_-]{3,50}$') &&
-        // Area name validation
-        request.resource.data.areaName is string &&
-        request.resource.data.areaName.size() >= 2 &&
-        request.resource.data.areaName.size() <= 100;
-
-      allow update: if request.auth != null && 
-        (
-          // Allow updating message count and last message time for any authenticated user
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['messageCount', 'lastMessageAt', 'lastActivityAt']) ||
-          // Allow admins/master admins to update user management fields
-          (exists(/databases/$(database)/documents/chatrooms/$(chatroomId)) &&
-           (request.auth.uid in resource.data.get('admins', []) || 
-            request.auth.uid in resource.data.get('masterAdmins', [])) &&
-           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['admins', 'masterAdmins', 'bannedUsers', 'kickedUsers', 'moderators', 'lastActivityAt']))
-        );
-
-      // Message rules
-      match /messages/{messageId} {
-        allow read: if request.auth != null && 
-          // Check message hasn't expired
-          resource.data.expiresAt > request.time;
-
-        allow create: if request.auth != null && 
-          // User can only create messages with their own userId
-          request.resource.data.userId == request.auth.uid &&
-          // Message must have required fields
-          request.resource.data.keys().hasAll(['text', 'userId', 'userName', 'timestamp', 'expiresAt']) &&
-          // Expiry time must be within 48 hours
-          request.resource.data.expiresAt <= request.time + duration.value(48, 'h');
-
-        allow delete: if request.auth != null && 
-          (
-            // Message author can delete their own message
-            resource.data.userId == request.auth.uid ||
-            // Admins can delete any message
-            (exists(/databases/$(database)/documents/chatrooms/$(chatroomId)) &&
-             (request.auth.uid in get(/databases/$(database)/documents/chatrooms/$(chatroomId)).data.get('admins', []) ||
-              request.auth.uid in get(/databases/$(database)/documents/chatrooms/$(chatroomId)).data.get('masterAdmins', [])))
-          );
-      }
+    // Allow all reads and writes for testing
+    match /{document=**} {
+      allow read, write: if true;
     }
   }
 }
