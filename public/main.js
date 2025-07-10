@@ -1018,7 +1018,7 @@ async function showFinalGallery(destination) {
         toggleVisibility(galleryContainer, true);
 
     } catch (error) {
-        console.error("Gallery creation failed:", error);
+        console.error("Gallerycreation failed:", error);
         setLoading(false);
         galleryTitle.textContent = `Tour Complete: ${destination}`;
         galleryGrid.innerHTML = '<p class="text-slate-400 col-span-full text-center">Gallery content unavailable</p>';
@@ -1536,49 +1536,88 @@ function getAreaChatId() {
     return 'general-seoul';
 }
 
-// Function to open the chat for the current location
+// Chat integration
 async function openAreaChat() {
+    const user = authService.getCurrentUser();
+    if (!user) {
+        showToast('Please sign in to use area chat', 'error');
+        return;
+    }
+
+    // Wait a moment to ensure authentication is fully processed
+    await new Promise(resolve => setTimeout(resolve, 100));
+
     try {
-        // Wait for authentication state to be determined
-        let user = authService.getCurrentUser();
-        if (!user) {
-            // Wait a bit for auth state to load
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            user = authService.getCurrentUser();
+        let areaId, areaName;
+
+        if (tourState.state === 'touring' && tourState.currentLocationIndex >= 0) {
+            const currentLocation = tourState.locations[tourState.currentLocationIndex];
+            areaId = currentLocation.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+            areaName = currentLocation.name;
+        } else {
+            // Use the search input as fallback
+            const searchValue = destinationInput.value.trim();
+            if (!searchValue) {
+                showToast('Please enter a destination or start a tour first', 'error');
+                return;
+            }
+            areaId = searchValue.toLowerCase().replace(/[^a-z0-9]/g, '');
+            areaName = searchValue;
         }
 
-        if (!user) {
-            showToast('Please sign in to join area chat', 'error');
-            return;
-        }
-
-        currentChatroomId = getAreaChatId();
-        console.log('Opening chat for area:', currentChatroomId);
-
-        if (!currentChatroomId) {
+        if (!areaId || areaId.length < 3) {
             showToast('Could not determine the area chat ID.', 'error');
             return;
         }
 
-        const areaName = tourState.currentLocation?.area || tourState.currentLocation?.name || 'Seoul Area';
+        console.log('Opening chat for area:', areaId, areaName);
+
+        currentChatroomId = areaId;
+        chatroomTitle.textContent = `${areaName} Area Chat`;
+        chatroomModal.classList.remove('hidden');
 
         // Get or create chatroom
-        const chatroomRef = await chatroomService.getChatroom(currentChatroomId, areaName, user);
+        const chatroomRef = await chatroomService.getChatroom(areaId, areaName, user);
 
-        // Show modal
-        chatroomModal.classList.remove('hidden');
-        chatroomTitle.textContent = `${areaName} Chat`;
+        // Listen for messages
+        chatroomService.listenToMessages(areaId, (messages) => {
+            displayMessages(messages);
+        });
 
-        // Subscribe to messages
-        chatroomService.subscribeToMessages(currentChatroomId, displayMessages);
-
-        // Get chatroom data and setup UI
-        const chatroomData = await chatroomService.getChatroomData(currentChatroomId);
-        setupMessageInput(user, chatroomData);
+        // Update UI based on user permissions
+        await updateChatPermissions(areaId, user);
 
     } catch (error) {
         console.error('Error opening area chat:', error);
         showToast('Failed to open area chat: ' + error.message, 'error');
+    }
+}
+
+async function updateChatPermissions(chatroomId, user) {
+    if (!user) {
+        chatroomInputSection.style.display = 'none';
+        return;
+    }
+
+    try {
+        const chatroom = await chatroomService.getChatroomData(chatroomId);
+        const isAdmin = chatroom?.admins?.includes(user.uid);
+        const isMasterAdmin = chatroom?.masterAdmins?.includes(user.uid);
+
+        // Show input section for authenticated users
+        chatroomInputSection.style.display = 'flex';
+
+        // Update admin indicator
+        const adminIndicator = document.querySelector('.admin-indicator');
+        if (adminIndicator) {
+            adminIndicator.textContent = isMasterAdmin ? 'Master Admin' : isAdmin ? 'Admin' : '';
+            adminIndicator.style.display = (isAdmin || isMasterAdmin) ? 'inline' : 'none';
+        }
+
+    } catch (error) {
+        console.error('Error updating chat permissions:', error);
+        // Still show input section for authenticated users
+        chatroomInputSection.style.display = 'flex';
     }
 }
 

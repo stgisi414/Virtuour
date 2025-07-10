@@ -330,7 +330,7 @@ class ChatroomService {
       const admins = chatroomData.admins || [];
       return admins.includes(userId);
   }
-  
+
   isMasterAdmin(chatroomData, userId) {
     if (!chatroomData) return false;
     const masterAdmins = chatroomData.masterAdmins || [];
