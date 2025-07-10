@@ -98,7 +98,10 @@ app.post('/api/generate-tour', async (req, res) => {
 
     const response = await fetch(GEMINI_API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Referer': 'https://aitours.top'
+      },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
@@ -231,7 +234,10 @@ app.get('/api/local-info/:query', async (req, res) => {
     
     const response = await fetch(GEMINI_API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Referer': 'https://aitours.top'
+      },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: { temperature: 0, response_mime_type: "application/json" }
@@ -281,7 +287,10 @@ app.get('/api/news/:query', async (req, res) => {
     
     const response = await fetch(GEMINI_API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Referer': 'https://aitours.top'
+      },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: { temperature: 0.2, response_mime_type: "application/json" }
