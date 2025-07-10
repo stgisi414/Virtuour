@@ -1,7 +1,6 @@
 
 // --- 1. API CONFIGURATION ---
 const API_BASE_URL = window.location.origin;
-const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
 
 // --- 2. DOM ELEMENT REFERENCES ---
 const destinationInput = document.getElementById('destinationInput');
