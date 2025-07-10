@@ -1,4 +1,3 @@
-
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -12,12 +11,13 @@ service cloud.firestore {
         (
           // Allow updating message count and last message time
           (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['messageCount', 'lastMessageAt'])) ||
-          // Allow admins to update chatroom settings (only if chatroom exists and user is admin)
+          // Allow admins to update chatroom settings (only if chatroom exists and user is admin/master admin)
           (exists(/databases/$(database)/documents/chatrooms/$(chatroomId)) &&
-           resource.data.keys().hasAny(['admins']) && 
-           request.auth.uid in resource.data.admins)
+           resource.data.keys().hasAny(['admins', 'masterAdmins']) && 
+           (request.auth.uid in resource.data.admins || request.auth.uid in resource.data.get('masterAdmins', [])) &&
+           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['admins', 'masterAdmins', 'bannedUsers', 'kickedUsers', 'moderators', 'lastActivityAt']))
         );
-      
+
       // Message rules
       match /messages/{messageId} {
         allow read: if request.auth != null && 
@@ -27,7 +27,7 @@ service cloud.firestore {
           (!exists(/databases/$(database)/documents/chatrooms/$(chatroomId)) ||
            !get(/databases/$(database)/documents/chatrooms/$(chatroomId)).data.keys().hasAny(['bannedUsers']) ||
            !(request.auth.uid in get(/databases/$(database)/documents/chatrooms/$(chatroomId)).data.bannedUsers));
-          
+
         allow create: if request.auth != null && 
           // User can only create messages with their own userId
           request.resource.data.userId == request.auth.uid &&
@@ -39,7 +39,7 @@ service cloud.firestore {
           (!exists(/databases/$(database)/documents/chatrooms/$(chatroomId)) ||
            !get(/databases/$(database)/documents/chatrooms/$(chatroomId)).data.keys().hasAny(['bannedUsers']) ||
            !(request.auth.uid in get(/databases/$(database)/documents/chatrooms/$(chatroomId)).data.bannedUsers));
-          
+
         allow delete: if request.auth != null && 
           (
             // Message author can delete their own message

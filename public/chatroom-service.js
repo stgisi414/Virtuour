@@ -1,4 +1,3 @@
-
 import { 
   db,
   collection, 
@@ -25,21 +24,30 @@ class ChatroomService {
     this.unsubscribes = new Map();
   }
 
-  async getChatroom(areaId, areaName) {
+  async getChatroom(areaId, areaName, currentUser = null) {
     try {
       const chatroomRef = doc(db, 'chatrooms', areaId);
       const chatroomDoc = await getDoc(chatroomRef);
 
       if (!chatroomDoc.exists()) {
-        // Create new chatroom
+        // Create new chatroom with the first user as admin
+        const initialAdmins = currentUser ? [currentUser.uid] : [];
         await setDoc(chatroomRef, {
           areaId: areaId,
           areaName: areaName,
           createdAt: serverTimestamp(),
+          lastActivityAt: serverTimestamp(),
           messageCount: 0,
-          admins: [], // Array of user IDs who are admins
+          admins: initialAdmins, // First user becomes admin
+          masterAdmins: [], // Array of master admin user IDs
           bannedUsers: [], // Array of user IDs who are banned
-          moderators: [] // Array of user IDs who are moderators
+          moderators: [], // Array of user IDs who are moderators
+          createdBy: currentUser ? currentUser.uid : null
+        });
+      } else {
+        // Update last activity when someone joins
+        await updateDoc(chatroomRef, {
+          lastActivityAt: serverTimestamp()
         });
       }
 
@@ -55,20 +63,24 @@ class ChatroomService {
       // Check if user is banned
       const chatroomRef = doc(db, 'chatrooms', areaId);
       const chatroomDoc = await getDoc(chatroomRef);
-      
+
       if (chatroomDoc.exists()) {
         const bannedUsers = chatroomDoc.data().bannedUsers || [];
         if (bannedUsers.includes(user.uid)) {
           throw new Error('You are banned from this chatroom');
         }
+        // Update last activity on message
+        await updateDoc(chatroomRef, {
+          lastActivityAt: serverTimestamp()
+        });
       }
 
       const messagesRef = collection(db, 'chatrooms', areaId, 'messages');
-      
+
       // Set expiry time to 48 hours from now
       const expiryTime = new Date();
       expiryTime.setHours(expiryTime.getHours() + 48);
-      
+
       await addDoc(messagesRef, {
         text: messageText,
         userId: user.uid,
@@ -113,7 +125,7 @@ class ChatroomService {
             messages.push({ id: doc.id, ...data });
           }
         });
-        
+
         // Reverse to show oldest first
         messages.reverse();
         callback(messages);
@@ -159,12 +171,13 @@ class ChatroomService {
       const chatroomData = await this.getChatroomData(areaId);
       if (!chatroomData) throw new Error('Chatroom not found');
 
-      const admins = chatroomData.admins || [];
-      if (!admins.includes(currentUser.uid)) {
-        throw new Error('Only admins can promote users');
+      const masterAdmins = chatroomData.masterAdmins || [];
+       if (!masterAdmins.includes(currentUser.uid)) {
+        throw new Error('Only master admins can promote users');
       }
 
-      if (admins.includes(userId)) {
+
+      if (this.isAdmin(chatroomData, userId)) {
         throw new Error('User is already an admin');
       }
 
@@ -184,9 +197,9 @@ class ChatroomService {
       const chatroomData = await this.getChatroomData(areaId);
       if (!chatroomData) throw new Error('Chatroom not found');
 
-      const admins = chatroomData.admins || [];
-      if (!admins.includes(currentUser.uid)) {
-        throw new Error('Only admins can demote users');
+      const masterAdmins = chatroomData.masterAdmins || [];
+       if (!masterAdmins.includes(currentUser.uid)) {
+        throw new Error('Only master admins can demote users');
       }
 
       const chatroomRef = doc(db, 'chatrooms', areaId);
@@ -206,8 +219,9 @@ class ChatroomService {
       if (!chatroomData) throw new Error('Chatroom not found');
 
       const admins = chatroomData.admins || [];
-      if (!admins.includes(currentUser.uid)) {
-        throw new Error('Only admins can ban users');
+      const masterAdmins = chatroomData.masterAdmins || [];
+      if (!admins.includes(currentUser.uid) && !masterAdmins.includes(currentUser.uid)) {
+        throw new Error('Only admins or master admins can ban users');
       }
 
       const bannedUsers = chatroomData.bannedUsers || [];
@@ -233,8 +247,9 @@ class ChatroomService {
       if (!chatroomData) throw new Error('Chatroom not found');
 
       const admins = chatroomData.admins || [];
-      if (!admins.includes(currentUser.uid)) {
-        throw new Error('Only admins can unban users');
+      const masterAdmins = chatroomData.masterAdmins || [];
+      if (!admins.includes(currentUser.uid) && !masterAdmins.includes(currentUser.uid)) {
+        throw new Error('Only admins or master admins can unban users');
       }
 
       const chatroomRef = doc(db, 'chatrooms', areaId);
@@ -254,8 +269,9 @@ class ChatroomService {
       if (!chatroomData) throw new Error('Chatroom not found');
 
       const admins = chatroomData.admins || [];
-      if (!admins.includes(currentUser.uid)) {
-        throw new Error('Only admins can kick users');
+      const masterAdmins = chatroomData.masterAdmins || [];
+      if (!admins.includes(currentUser.uid) && !masterAdmins.includes(currentUser.uid)) {
+        throw new Error('Only admins or master admins can kick users');
       }
 
       // Temporarily ban for 10 minutes
@@ -282,8 +298,9 @@ class ChatroomService {
       if (!chatroomData) throw new Error('Chatroom not found');
 
       const admins = chatroomData.admins || [];
-      if (!admins.includes(currentUser.uid)) {
-        throw new Error('Only admins can delete messages');
+      const masterAdmins = chatroomData.masterAdmins || [];
+      if (!admins.includes(currentUser.uid) && !masterAdmins.includes(currentUser.uid)) {
+        throw new Error('Only admins or master admins can delete messages');
       }
 
       const messageRef = doc(db, 'chatrooms', areaId, 'messages', messageId);
@@ -296,15 +313,71 @@ class ChatroomService {
   }
 
   isAdmin(chatroomData, userId) {
-    if (!chatroomData) return false;
-    const admins = chatroomData.admins || [];
-    return admins.includes(userId);
+      if (!chatroomData) return false;
+      const admins = chatroomData.admins || [];
+      return admins.includes(userId);
   }
+  
+  isMasterAdmin(chatroomData, userId) {
+    if (!chatroomData) return false;
+    const masterAdmins = chatroomData.masterAdmins || [];
+    return masterAdmins.includes(userId);
+  }
+
 
   isBanned(chatroomData, userId) {
     if (!chatroomData) return false;
     const bannedUsers = chatroomData.bannedUsers || [];
     return bannedUsers.includes(userId);
+  }
+
+   async addMasterAdmin(areaId, userId, currentUser) {
+    try {
+      const chatroomData = await this.getChatroomData(areaId);
+      if (!chatroomData) throw new Error('Chatroom not found');
+
+      const masterAdmins = chatroomData.masterAdmins || [];
+      if (!masterAdmins.includes(currentUser.uid)) {
+        throw new Error('Only master admins can promote other master admins');
+      }
+
+      if (masterAdmins.includes(userId)) {
+        throw new Error('User is already a master admin');
+      }
+
+      const chatroomRef = doc(db, 'chatrooms', areaId);
+      await updateDoc(chatroomRef, {
+        masterAdmins: arrayUnion(userId)
+      });
+
+    } catch (error) {
+      console.error('Error promoting to master admin:', error);
+      throw error;
+    }
+  }
+    async removeMasterAdmin(areaId, userId, currentUser) {
+    try {
+      const chatroomData = await this.getChatroomData(areaId);
+      if (!chatroomData) throw new Error('Chatroom not found');
+
+      const masterAdmins = chatroomData.masterAdmins || [];
+      if (!masterAdmins.includes(currentUser.uid)) {
+        throw new Error('Only master admins can remove other master admins');
+      }
+
+      if (!masterAdmins.includes(userId)) {
+        throw new Error('User is not a master admin');
+      }
+
+      const chatroomRef = doc(db, 'chatrooms', areaId);
+      await updateDoc(chatroomRef, {
+        masterAdmins: arrayRemove(userId)
+      });
+
+    } catch (error) {
+      console.error('Error demoting master admin:', error);
+      throw error;
+    }
   }
 }
 

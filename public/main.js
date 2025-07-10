@@ -1532,8 +1532,14 @@ function displayMessages(messages, chatroomData, currentUser) {
         userName.className = 'font-semibold text-cyan-400 text-sm';
         userName.textContent = message.userName;
         
-        // Add admin badge if user is admin
-        if (chatroomService.isAdmin(chatroomData, message.userId)) {
+        // Add admin badges
+        if (chatroomService.isMasterAdmin(chatroomData, message.userId)) {
+            const masterAdminBadge = document.createElement('span');
+            masterAdminBadge.className = 'text-xs bg-purple-500 text-white px-1 rounded';
+            masterAdminBadge.textContent = '🛡️';
+            masterAdminBadge.title = 'Master Admin';
+            header.appendChild(masterAdminBadge);
+        } else if (chatroomService.isAdmin(chatroomData, message.userId)) {
             const adminBadge = document.createElement('span');
             adminBadge.className = 'text-xs bg-yellow-500 text-black px-1 rounded';
             adminBadge.textContent = '👑';
@@ -1600,13 +1606,32 @@ function displayMessages(messages, chatroomData, currentUser) {
                 promoteBtn.title = 'Make admin';
                 promoteBtn.onclick = () => promoteToAdmin(message.userId, message.userName);
                 adminControls.appendChild(promoteBtn);
-            } else {
+            } else if (!chatroomService.isMasterAdmin(chatroomData, message.userId)) {
                 const demoteBtn = document.createElement('button');
                 demoteBtn.className = 'text-xs bg-gray-600 hover:bg-gray-500 text-white px-2 py-1 rounded';
                 demoteBtn.textContent = '📉';
                 demoteBtn.title = 'Remove admin';
                 demoteBtn.onclick = () => demoteAdmin(message.userId, message.userName);
                 adminControls.appendChild(demoteBtn);
+            }
+            
+            // Master admin controls (only for master admins)
+            if (chatroomService.isMasterAdmin(chatroomData, currentUser.uid)) {
+                if (!chatroomService.isMasterAdmin(chatroomData, message.userId)) {
+                    const masterPromoteBtn = document.createElement('button');
+                    masterPromoteBtn.className = 'text-xs bg-purple-600 hover:bg-purple-500 text-white px-2 py-1 rounded';
+                    masterPromoteBtn.textContent = '🛡️';
+                    masterPromoteBtn.title = 'Make master admin';
+                    masterPromoteBtn.onclick = () => promoteToMasterAdmin(message.userId, message.userName);
+                    adminControls.appendChild(masterPromoteBtn);
+                } else {
+                    const masterDemoteBtn = document.createElement('button');
+                    masterDemoteBtn.className = 'text-xs bg-purple-800 hover:bg-purple-700 text-white px-2 py-1 rounded';
+                    masterDemoteBtn.textContent = '🚫👑';
+                    masterDemoteBtn.title = 'Remove master admin';
+                    masterDemoteBtn.onclick = () => demoteMasterAdmin(message.userId, message.userName);
+                    adminControls.appendChild(masterDemoteBtn);
+                }
             }
             
             adminControls.appendChild(deleteBtn);
@@ -1702,6 +1727,40 @@ async function promoteToAdmin(userId, userName) {
         } catch (error) {
             console.error('Error promoting user:', error);
             showToast('Failed to promote user', 'error');
+        }
+    }
+}
+
+async function promoteToMasterAdmin(userId, userName) {
+    if (!currentChatroomId) return;
+    
+    const user = authService.getCurrentUser();
+    if (!user) return;
+    
+    if (confirm(`Make ${userName} a MASTER ADMIN of this chatroom? This gives them full control over all admins and settings.`)) {
+        try {
+            await chatroomService.promoteToMasterAdmin(currentChatroomId, userId, user);
+            showToast(`${userName} is now a master admin`, 'success');
+        } catch (error) {
+            console.error('Error promoting user:', error);
+            showToast('Failed to promote user', 'error');
+        }
+    }
+}
+
+async function demoteMasterAdmin(userId, userName) {
+    if (!currentChatroomId) return;
+    
+    const user = authService.getCurrentUser();
+    if (!user) return;
+    
+    if (confirm(`Remove ${userName} as master admin?`)) {
+        try {
+            await chatroomService.demoteMasterAdmin(currentChatroomId, userId, user);
+            showToast(`${userName} is no longer a master admin`, 'success');
+        } catch (error) {
+            console.error('Error demoting user:', error);
+            showToast('Failed to demote user', 'error');
         }
     }
 }
