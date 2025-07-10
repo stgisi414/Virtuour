@@ -1,0 +1,24 @@
+GET https://eab5eb16-e6ae-4089-bc2e-76c0faca76df-00-39zbke3ypuuxx.riker.replit.dev:5000/style.css net::ERR_ABORTED 502 (Bad Gateway)Understand this error
+eab5eb16-e6ae-4089-bc2e-76c0faca76df-00-39zbke3ypuuxx.riker.replit.dev/:34  GET https://eab5eb16-e6ae-4089-bc2e-76c0faca76df-00-39zbke3ypuuxx.riker.replit.dev:5000/virtuour_logo.png 502 (Bad Gateway)Understand this error
+eab5eb16-e6ae-4089-bc2e-76c0faca76df-00-39zbke3ypuuxx.riker.replit.dev/:131  GET https://eab5eb16-e6ae-4089-bc2e-76c0faca76df-00-39zbke3ypuuxx.riker.replit.dev:5000/main.js net::ERR_ABORTED 502 (Bad Gateway)Understand this error
+(index):64 cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation
+(anonymous) @ (index):64
+(anonymous) @ (index):64Understand this warning
+js?key=AIzaSyCYxnWpHNlzAz5h2W3pGTaW_oIP1ukTs1Y&callback=initMap&libraries=places:1410 Google Maps JavaScript API has been loaded directly without loading=async. This can result in suboptimal performance. For best-practice loading patterns please see https://goo.gle/js-api-loading
+bda @ js?key=AIzaSyCYxnWpHNlzAz5h2W3pGTaW_oIP1ukTs1Y&callback=initMap&libraries=places:1410
+google.maps.Load @ js?key=AIzaSyCYxnWpHNlzAz5h2W3pGTaW_oIP1ukTs1Y&callback=initMap&libraries=places:14
+(anonymous) @ js?key=AIzaSyCYxnWpHNlzAz5h2W3pGTaW_oIP1ukTs1Y&callback=initMap&libraries=places:1653
+(anonymous) @ js?key=AIzaSyCYxnWpHNlzAz5h2W3pGTaW_oIP1ukTs1Y&callback=initMap&libraries=places:1653Understand this warning
+(index):135 Uncaught (in promise) TypeError: window.initializeTourApp is not a function
+    at initMap ((index):135:20)
+    at js?key=AIzaSyCYxnWpHNlzAz5h2W3pGTaW_oIP1ukTs1Y&callback=initMap&libraries=places:1415:275
+    at js?key=AIzaSyCYxnWpHNlzAz5h2W3pGTaW_oIP1ukTs1Y&callback=initMap&libraries=places:1414:288
+initMap @ (index):135
+(anonymous) @ js?key=AIzaSyCYxnWpHNlzAz5h2W3pGTaW_oIP1ukTs1Y&callback=initMap&libraries=places:1415
+(anonymous) @ js?key=AIzaSyCYxnWpHNlzAz5h2W3pGTaW_oIP1ukTs1Y&callback=initMap&libraries=places:1414
+Promise.then
+bda @ js?key=AIzaSyCYxnWpHNlzAz5h2W3pGTaW_oIP1ukTs1Y&callback=initMap&libraries=places:1414
+google.maps.Load @ js?key=AIzaSyCYxnWpHNlzAz5h2W3pGTaW_oIP1ukTs1Y&callback=initMap&libraries=places:14
+(anonymous) @ js?key=AIzaSyCYxnWpHNlzAz5h2W3pGTaW_oIP1ukTs1Y&callback=initMap&libraries=places:1653
+(anonymous) @ js?key=AIzaSyCYxnWpHNlzAz5h2W3pGTaW_oIP1ukTs1Y&callback=initMap&libraries=places:1653Understand this error
+eab5eb16-e6ae-4089-bc2e-76c0faca76df-00-39zbke3ypuuxx.riker.replit.dev/:1 <meta name="apple-mobile-web-app-capable" content="yes"> is deprecated. Please include <meta name="mobile-web-app-capable" content="yes">
