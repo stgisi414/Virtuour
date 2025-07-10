@@ -1,6 +1,7 @@
 
 // --- 1. API CONFIGURATION ---
 const API_BASE_URL = window.location.origin;
+const GOOGLE_API_KEY = 'AIzaSyCYxnWpHNlzAz5h2W3pGTaW_oIP1ukTs1Y';
 
 // --- 2. DOM ELEMENT REFERENCES ---
 const destinationInput = document.getElementById('destinationInput');
@@ -281,12 +282,14 @@ class LocationProcessor {
     }
 
     async _findOptimalLocation(locationName, cityName) {
+        // Step 1: Get multiple geocoding candidates
         const candidates = await this._getGeocodingCandidates(locationName, cityName);
         
         if (candidates.length === 0) {
             throw new Error(`No geocoding results for ${locationName}`);
         }
 
+        // Step 2: Find the best candidate with Street View
         for (const candidate of candidates) {
             const streetViewResult = await this._findNearestStreetView(candidate);
             
@@ -303,6 +306,7 @@ class LocationProcessor {
             }
         }
 
+        // Step 3: Fallback to first candidate without Street View
         const fallback = candidates[0];
         return {
             locationName,
@@ -622,26 +626,27 @@ function presentCurrentLocation() {
     
     tourState.pause();
     
-    speakLocationDescription(location);
+    playLocationNarration(location);
 }
 
-async function speakLocationDescription(location) {
+async function playLocationNarration(location) {
     try {
         const text = `Welcome to ${location.locationName}. ${location.briefDescription}. You can explore this area or continue to the next location.`;
         
-        // Try Google Cloud TTS first
-        const response = await fetch(`${API_BASE_URL}/api/generate-speech`, {
+        const audioResponse = await fetch(`${API_BASE_URL}/api/generate-speech`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                text,
-                language: location.language || 'en',
-                languageRegion: location.languageRegion || 'US'
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                text: text,
+                language: 'en',
+                languageRegion: 'US'
             })
         });
         
-        if (response.ok) {
-            const audioBlob = await response.blob();
+        if (audioResponse.ok) {
+            const audioBlob = await audioResponse.blob();
             const audioUrl = URL.createObjectURL(audioBlob);
             
             currentAudio = new Audio(audioUrl);
@@ -650,54 +655,35 @@ async function speakLocationDescription(location) {
                 URL.revokeObjectURL(audioUrl);
                 currentAudio = null;
             };
+            
             currentAudio.onerror = () => {
+                console.warn('Audio playback failed, falling back to text display');
                 toggleVisibility(tourInfoContainer, false);
                 URL.revokeObjectURL(audioUrl);
                 currentAudio = null;
-                fallbackToWebSpeech(text);
             };
             
             currentAudio.play();
             
             tourState.setTimeout(() => {
                 if (currentAudio) {
-                    stopAudio();
+                    currentAudio.pause();
                     toggleVisibility(tourInfoContainer, false);
+                    currentAudio = null;
                 }
-            }, 15000);
+            }, 20000);
         } else {
-            throw new Error('TTS service unavailable');
+            console.warn('TTS failed, showing text only');
+            tourState.setTimeout(() => {
+                toggleVisibility(tourInfoContainer, false);
+            }, 8000);
         }
+        
     } catch (error) {
-        console.warn('Google TTS failed, falling back to Web Speech API:', error);
-        fallbackToWebSpeech(text);
-    }
-}
-
-function fallbackToWebSpeech(text) {
-    if ('speechSynthesis' in window) {
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 0.9;
-        utterance.pitch = 1.1;
-        
-        utterance.onend = () => {
-            toggleVisibility(tourInfoContainer, false);
-        };
-        
-        utterance.onerror = () => {
-            toggleVisibility(tourInfoContainer, false);
-        };
-        
-        speechSynthesis.speak(utterance);
-        
-        tourState.setTimeout(() => {
-            speechSynthesis.cancel();
-            toggleVisibility(tourInfoContainer, false);
-        }, 15000);
-    } else {
+        console.error('Error with TTS:', error);
         tourState.setTimeout(() => {
             toggleVisibility(tourInfoContainer, false);
-        }, 5000);
+        }, 8000);
     }
 }
 
@@ -956,67 +942,14 @@ async function completeTour() {
     }
 }
 
-// --- 13. UTILITY AND RESET FUNCTIONS ---
-function resetTourState() {
-    stopAudio();
-    if (localTimeInterval) clearInterval(localTimeInterval);
-    
-    tourState.reset();
-    destinationTimezone = null;
-    currentStopIndex = 0;
-    exploreLocation = null;
-    tourItinerary = [];
-    
-    if (locationProcessor) {
-        locationProcessor.clearCache();
-    }
-}
-
-function resetUI() {
-    toggleVisibility(galleryContainer, false);
-    toggleVisibility(streetviewContainer, false);
-    toggleVisibility(addressLabel, false);
-    toggleVisibility(controlsContainer, false);
-    toggleVisibility(tourInfoContainer, false);
-    
-    if (streetView) streetView.setVisible(false);
-    
-    destinationInput.value = '';
-    generateTourButton.disabled = false;
-    generateTourButton.textContent = 'Generate Tour';
-    toggleVisibility(tourSetupContainer, true);
-    
-    if (galleryGrid) galleryGrid.innerHTML = '';
-    setLoading(false);
-}
-
-function hideAllTourUI() {
-    toggleVisibility(streetviewContainer, false);
-    toggleVisibility(controlsContainer, false);
-    toggleVisibility(addressLabel, false);
-    toggleVisibility(tourInfoContainer, false);
-    if (streetView) streetView.setVisible(false);
-}
-
-function resetToMainMenu() {
-    resetTourState();
-    resetUI();
-    console.log('Reset to main menu');
-}
-
-function positionControls() {
-    if (controlsContainer && window.innerHeight) {
-        controlsContainer.style.bottom = '120px';
-        controlsContainer.style.right = '16px';
-    }
-}
-
-// --- 14. ITINERARY FETCHING ---
+// --- 13. ITINERARY FETCHING ---
 async function fetchItinerary(destination, focus) {
     try {
         const response = await fetch(`${API_BASE_URL}/api/generate-tour`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+            },
             body: JSON.stringify({
                 destination: destination,
                 focus: focus
@@ -1041,7 +974,7 @@ async function fetchItinerary(destination, focus) {
     }
 }
 
-// --- 15. GALLERY FUNCTIONS ---
+// --- 14. GALLERY FUNCTIONS ---
 async function showFinalGallery(destination) {
     hideAllTourUI();
     
@@ -1197,6 +1130,61 @@ function updateLocalTime(element) {
             element.textContent = new Date().toLocaleTimeString();
         }
     }, 1000);
+}
+
+// --- 15. UTILITY AND RESET FUNCTIONS ---
+function resetTourState() {
+    stopAudio();
+    if (localTimeInterval) clearInterval(localTimeInterval);
+    
+    tourState.reset();
+    destinationTimezone = null;
+    currentStopIndex = 0;
+    exploreLocation = null;
+    tourItinerary = [];
+    
+    if (locationProcessor) {
+        locationProcessor.clearCache();
+    }
+}
+
+function resetUI() {
+    toggleVisibility(galleryContainer, false);
+    toggleVisibility(streetviewContainer, false);
+    toggleVisibility(addressLabel, false);
+    toggleVisibility(controlsContainer, false);
+    toggleVisibility(tourInfoContainer, false);
+    
+    if (streetView) streetView.setVisible(false);
+    
+    destinationInput.value = '';
+    generateTourButton.disabled = false;
+    generateTourButton.textContent = 'Generate Tour';
+    toggleVisibility(tourSetupContainer, true);
+    
+    if (galleryGrid) galleryGrid.innerHTML = '';
+    setLoading(false);
+}
+
+function hideAllTourUI() {
+    toggleVisibility(streetviewContainer, false);
+    toggleVisibility(controlsContainer, false);
+    toggleVisibility(addressLabel, false);
+    toggleVisibility(tourInfoContainer, false);
+    if (streetView) streetView.setVisible(false);
+}
+
+function resetToMainMenu() {
+    resetTourState();
+    resetUI();
+    console.log('Reset to main menu');
+}
+
+function positionControls() {
+    if (controlsContainer && window.innerHeight) {
+        controlsContainer.style.bottom = '120px';
+        controlsContainer.style.right = '16px';
+    }
 }
 
 // --- 16. EVENT LISTENERS ---
