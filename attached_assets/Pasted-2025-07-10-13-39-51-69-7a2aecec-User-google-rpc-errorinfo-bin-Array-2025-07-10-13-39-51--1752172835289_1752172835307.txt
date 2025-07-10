@@ -1,0 +1,127 @@
+2025-07-10 13:39:51.69
+7a2aecec
+User
+'google.rpc.errorinfo-bin' => [Array],
+2025-07-10 13:39:51.69
+7a2aecec
+User
+'google.rpc.localizedmessage-bin' => [Array],
+2025-07-10 13:39:51.69
+7a2aecec
+User
+'grpc-status-details-bin' => [Array]
+2025-07-10 13:39:51.69
+7a2aecec
+User
+},
+2025-07-10 13:39:51.69
+7a2aecec
+User
+options: {}
+2025-07-10 13:39:51.69
+7a2aecec
+User
+},
+2025-07-10 13:39:51.69
+7a2aecec
+User
+note: 'Exception occurred in retry method that was not classified as transient',
+2025-07-10 13:39:51.69
+7a2aecec
+User
+statusDetails: [
+2025-07-10 13:39:51.69
+7a2aecec
+User
+ErrorInfo {
+2025-07-10 13:39:51.69
+7a2aecec
+User
+metadata: [Object],
+2025-07-10 13:39:51.69
+7a2aecec
+User
+reason: 'API_KEY_HTTP_REFERRER_BLOCKED',
+2025-07-10 13:39:51.69
+7a2aecec
+User
+domain: 'googleapis.com'
+2025-07-10 13:39:51.69
+7a2aecec
+User
+},
+2025-07-10 13:39:51.69
+7a2aecec
+User
+LocalizedMessage {
+2025-07-10 13:39:51.69
+7a2aecec
+User
+locale: 'en-US',
+2025-07-10 13:39:51.69
+7a2aecec
+User
+message: 'Requests from referer are blocked.'
+2025-07-10 13:39:51.69
+7a2aecec
+User
+}
+2025-07-10 13:39:51.69
+7a2aecec
+User
+],
+2025-07-10 13:39:51.69
+7a2aecec
+User
+reason: 'API_KEY_HTTP_REFERRER_BLOCKED',
+2025-07-10 13:39:51.69
+7a2aecec
+User
+domain: 'googleapis.com',
+2025-07-10 13:39:51.69
+7a2aecec
+User
+errorInfoMetadata: {
+2025-07-10 13:39:51.69
+7a2aecec
+User
+consumer: 'projects/1065522503579',
+2025-07-10 13:39:51.69
+7a2aecec
+User
+httpReferrer: '',
+2025-07-10 13:39:51.69
+7a2aecec
+User
+service: 'texttospeech.googleapis.com'
+2025-07-10 13:39:51.69
+7a2aecec
+User
+}
+2025-07-10 13:39:51.69
+7a2aecec
+User
+}
+
+Wrap
+
+Colors
+GOOGLE_TTS_KEY
+AIzaSyA9PqKR1BekV3xaSoa4nkyptR5FDpXpWBo
+GOOGLE_GEMINI_KEY
+••••••••
+GOOGLE_YOUTUBE_KEY
+••••••••
+GOOGLE_SEARCH_KEY
+••••••••
+VIRTUOUR_CX
+••••••••
+/
+
+1m
+ • 
+2 minutes ago
+Port :5000 opened on
+
+Virtuour - Replit
+Could not connect to the reCAPTCHA service. Please check your internet connection and reload to get a reCAPTCHA challenge.
