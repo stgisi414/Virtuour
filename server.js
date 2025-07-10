@@ -33,12 +33,21 @@ const CUSTOM_SEARCH_API_URL = 'https://www.googleapis.com/customsearch/v1';
 let ttsClient;
 if (GOOGLE_TTS_KEY) {
   try {
-    const credentials = JSON.parse(GOOGLE_TTS_KEY);
-    ttsClient = new textToSpeech.TextToSpeechClient({
-      credentials: credentials
-    });
+    // Check if GOOGLE_TTS_KEY is a JSON string (service account) or API key
+    if (GOOGLE_TTS_KEY.startsWith('{')) {
+      // It's a service account JSON
+      const credentials = JSON.parse(GOOGLE_TTS_KEY);
+      ttsClient = new textToSpeech.TextToSpeechClient({
+        credentials: credentials
+      });
+    } else {
+      // It's an API key - use it with auth
+      ttsClient = new textToSpeech.TextToSpeechClient({
+        apiKey: GOOGLE_TTS_KEY
+      });
+    }
   } catch (error) {
-    console.error('Error parsing Google TTS credentials:', error);
+    console.error('Error initializing Google TTS client:', error);
     ttsClient = new textToSpeech.TextToSpeechClient(); // Fallback to default
   }
 } else {
