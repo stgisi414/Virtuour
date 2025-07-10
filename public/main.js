@@ -164,7 +164,10 @@ function showToast(text, type = 'info') {
             background: backgroundColor,
             borderRadius: "0.5rem",
             boxShadow: "0 3px 6px -1px rgba(0, 0, 0, 0.12), 0 10px 36px -4px rgba(0, 0, 0, 0.3)",
-            fontFamily: "'Exo 2', sans-serif"
+            fontFamily: "'Exo 2', sans-serif",
+            zIndex: "9999",
+            position: "fixed",
+            top: "20px"
         },
     }).showToast();
 }
@@ -1550,13 +1553,13 @@ async function openAreaChat() {
     try {
         let areaId, areaName;
 
-        if (tourState.state === 'touring' && tourState.currentLocationIndex >= 0) {
-            const currentLocation = tourState.locations[tourState.currentLocationIndex];
-            areaId = currentLocation.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-            areaName = currentLocation.name;
+        if (tourState.state === 'paused' && currentStopIndex >= 0 && tourItinerary.length > 0) {
+            const currentLocation = tourItinerary[currentStopIndex];
+            areaId = currentLocation.locationName.toLowerCase().replace(/[^a-z0-9]/g, '');
+            areaName = currentLocation.locationName;
         } else {
-            // Use the search input as fallback
-            const searchValue = destinationInput.value.trim();
+            // Use current destination or search input as fallback
+            let searchValue = currentDestination || destinationInput.value.trim();
             if (!searchValue) {
                 showToast('Please enter a destination or start a tour first', 'error');
                 return;
