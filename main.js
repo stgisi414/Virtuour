@@ -47,6 +47,73 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('🚀 MAIN.JS: Firebase initialization calls completed');
 });
 
+function initializeChatroom() {
+    console.log('🚀 MAIN.JS: Initializing Chatroom...');
+    
+    const openChatroomBtn = document.getElementById('open-chatroom-btn');
+    const chatroomModal = document.getElementById('chatroom-modal');
+    const closeChatroomBtn = document.getElementById('close-chatroom');
+    const sendMessageBtn = document.getElementById('send-message-btn');
+    const chatMessageInput = document.getElementById('chat-message-input');
+    const chatroomMessages = document.getElementById('chatroom-messages');
+    const authRequiredMessage = document.getElementById('auth-required-message');
+    const chatInputContainer = document.getElementById('chat-input-container');
+
+    if (openChatroomBtn) {
+        openChatroomBtn.addEventListener('click', () => {
+            if (AuthService.isAuthenticated()) {
+                chatroomModal.classList.remove('hidden');
+                // Load messages for current location
+                if (currentDestination) {
+                    ChatroomService.loadMessages(currentDestination);
+                }
+            } else {
+                showToast('Please sign in to access area chat', 'error');
+            }
+        });
+    }
+
+    if (closeChatroomBtn) {
+        closeChatroomBtn.addEventListener('click', () => {
+            chatroomModal.classList.add('hidden');
+        });
+    }
+
+    if (sendMessageBtn && chatMessageInput) {
+        const sendMessage = async () => {
+            const message = chatMessageInput.value.trim();
+            if (message && AuthService.isAuthenticated() && currentDestination) {
+                try {
+                    await ChatroomService.sendMessage(currentDestination, message);
+                    chatMessageInput.value = '';
+                } catch (error) {
+                    showToast(`Failed to send message: ${error.message}`, 'error');
+                }
+            }
+        };
+
+        sendMessageBtn.addEventListener('click', sendMessage);
+        chatMessageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+    }
+
+    // Update chat UI based on auth state
+    AuthService.onAuthStateChanged((user) => {
+        if (authRequiredMessage && chatInputContainer) {
+            if (user) {
+                authRequiredMessage.classList.add('hidden');
+                chatInputContainer.classList.remove('hidden');
+            } else {
+                authRequiredMessage.classList.remove('hidden');
+                chatInputContainer.classList.add('hidden');
+            }
+        }
+    });
+}
+
 // Also initialize if DOM is already loaded
 if (document.readyState === 'loading') {
     console.log('🚀 MAIN.JS: DOM still loading, waiting for DOMContentLoaded...');
@@ -57,6 +124,7 @@ if (document.readyState === 'loading') {
     console.log('🚀 MAIN.JS: About to call initializeChatroom()...');
     initializeChatroom();
     console.log('🚀 MAIN.JS: Firebase initialization calls completed');
+}leted');
 }
 
 // --- 2. DOM ELEMENT REFERENCES ---
@@ -1359,6 +1427,196 @@ function initializeAuth() {
     const googleSigninBtn = document.getElementById('google-signin-btn');
     console.log('🚀 MAIN.JS: googleSigninBtn element:', googleSigninBtn);
     const showEmailAuthBtn = document.getElementById('show-email-auth');
+    
+    // Main page auth elements
+    const mainUserInfo = document.getElementById('main-user-info');
+    const mainAuthButtons = document.getElementById('main-auth-buttons');
+    const mainUserAvatar = document.getElementById('main-user-avatar');
+    const mainUserName = document.getElementById('main-user-name');
+    const mainLogoutBtn = document.getElementById('main-logout-btn');
+    const mainGoogleSigninBtn = document.getElementById('main-google-signin-btn');
+    console.log('🚀 MAIN.JS: googleSigninBtn element:', googleSigninBtn);
+    const mainShowEmailAuthBtn = document.getElementById('main-show-email-auth');
+    console.log('🚀 MAIN.JS: mainShowEmailAuthBtn element:', mainShowEmailAuthBtn);
+
+    // Modal elements
+    const emailAuthModal = document.getElementById('email-auth-modal');
+    const closeEmailModal = document.getElementById('close-email-modal');
+    const emailInput = document.getElementById('email-input');
+    const passwordInput = document.getElementById('password-input');
+    const emailSigninBtn = document.getElementById('email-signin-btn');
+    const emailSignupBtn = document.getElementById('email-signup-btn');
+    const chatLoginIndicator = document.getElementById('chat-login-indicator');
+
+    // Listen for auth state changes
+    console.log('🚀 MAIN.JS: Setting up AuthService.onAuthStateChanged listener...');
+    console.log('🚀 MAIN.JS: AuthService.onAuthStateChanged method:', AuthService.onAuthStateChanged);
+    AuthService.onAuthStateChanged((user) => {
+        console.log('🚀 MAIN.JS: Auth state change callback triggered with user:', user);
+        currentUser = user;
+        console.log('🚀 MAIN.JS: currentUser set to:', currentUser);
+        console.log('Auth state changed:', user);
+
+        if (user) {
+            // User is signed in - update header
+            if (userAvatar && userName) {
+                userAvatar.src = user.photoURL || 'https://via.placeholder.com/32';
+                userName.textContent = user.displayName || user.email;
+                userInfo.classList.remove('hidden');
+                userInfo.classList.add('flex');
+                authButtons.classList.add('hidden');
+            }
+
+            // User is signed in - update main page
+            if (mainUserAvatar && mainUserName) {
+                mainUserAvatar.src = user.photoURL || 'https://via.placeholder.com/40';
+                mainUserName.textContent = user.displayName || user.email;
+                mainUserInfo.classList.remove('hidden');
+                mainAuthButtons.classList.add('hidden');
+            }
+            
+            if (chatLoginIndicator) {
+                chatLoginIndicator.textContent = '';
+            }
+        } else {
+            // User is signed out - update header
+            if (userInfo && authButtons) {
+                userInfo.classList.add('hidden');
+                userInfo.classList.remove('flex');
+                authButtons.classList.remove('hidden');
+            }
+
+            // User is signed out - update main page
+            if (mainUserInfo && mainAuthButtons) {
+                mainUserInfo.classList.add('hidden');
+                mainAuthButtons.classList.remove('hidden');
+            }
+            
+            if (chatLoginIndicator) {
+                chatLoginIndicator.textContent = '(Login Required)';
+            }
+        }
+    });
+
+    // Header auth event listeners
+    console.log('🚀 MAIN.JS: Setting up event listeners...');
+    if (googleSigninBtn) {
+        console.log('🚀 MAIN.JS: Adding click listener to Google sign-in button');
+        googleSigninBtn.addEventListener('click', async () => {
+            console.log('🚀 MAIN.JS: Google sign-in button clicked');
+            try {
+                console.log('🚀 MAIN.JS: Calling AuthService.signInWithGoogle()...');
+                const user = await AuthService.signInWithGoogle();
+                console.log('🚀 MAIN.JS: Google sign-in successful, user:', user);
+                showToast('Signed in successfully!', 'success');
+            } catch (error) {
+                console.error('🚀 MAIN.JS: Google sign-in failed:', error);
+                showToast(`Sign in failed: ${error.message}`, 'error');
+            }
+        });
+        console.log('🚀 MAIN.JS: Google sign-in button event listener added');
+    } else {
+        console.error('🚀 MAIN.JS: googleSigninBtn element not found!');
+    }
+
+    if (showEmailAuthBtn) {
+        showEmailAuthBtn.addEventListener('click', () => {
+            emailAuthModal.classList.remove('hidden');
+        });
+    }
+
+    if (closeEmailModal) {
+        closeEmailModal.addEventListener('click', () => {
+            emailAuthModal.classList.add('hidden');
+        });
+    }
+
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', async () => {
+            try {
+                await AuthService.signOut();
+                showToast('Signed out successfully', 'success');
+            } catch (error) {
+                showToast(`Sign out failed: ${error.message}`, 'error');
+            }
+        });
+    }
+
+    // Main page auth event listeners
+    console.log('🚀 MAIN.JS: Setting up main page event listeners...');
+    if (mainGoogleSigninBtn) {
+        console.log('🚀 MAIN.JS: Adding click listener to main Google sign-in button');
+        mainGoogleSigninBtn.addEventListener('click', async () => {
+            console.log('🚀 MAIN.JS: Main Google sign-in button clicked');
+            try {
+                console.log('🚀 MAIN.JS: Calling AuthService.signInWithGoogle() from main button...');
+                const user = await AuthService.signInWithGoogle();
+                console.log('🚀 MAIN.JS: Main Google sign-in successful, user:', user);
+                showToast('Signed in successfully!', 'success');
+            } catch (error) {
+                console.error('🚀 MAIN.JS: Main Google sign-in failed:', error);
+                showToast(`Sign in failed: ${error.message}`, 'error');
+            }
+        });
+        console.log('🚀 MAIN.JS: Main Google sign-in button event listener added');
+    } else {
+        console.error('🚀 MAIN.JS: mainGoogleSigninBtn element not found!');
+    }
+
+    if (mainShowEmailAuthBtn) {
+        mainShowEmailAuthBtn.addEventListener('click', () => {
+            emailAuthModal.classList.remove('hidden');
+        });
+    }
+
+    if (mainLogoutBtn) {
+        mainLogoutBtn.addEventListener('click', async () => {
+            try {
+                await AuthService.signOut();
+                showToast('Signed out successfully', 'success');
+            } catch (error) {
+                showToast(`Sign out failed: ${error.message}`, 'error');
+            }
+        });
+    }
+
+    // Email auth event listeners
+    if (emailSigninBtn) {
+        emailSigninBtn.addEventListener('click', async () => {
+            try {
+                await AuthService.signInWithEmail(emailInput.value, passwordInput.value);
+                emailAuthModal.classList.add('hidden');
+                emailInput.value = '';
+                passwordInput.value = '';
+                showToast('Signed in successfully!', 'success');
+            } catch (error) {
+                showToast(`Sign in failed: ${error.message}`, 'error');
+            }
+        });
+    }
+
+    if (emailSignupBtn) {
+        emailSignupBtn.addEventListener('click', async () => {
+            try {
+                await AuthService.signUpWithEmail(emailInput.value, passwordInput.value);
+                emailAuthModal.classList.add('hidden');
+                emailInput.value = '';
+                passwordInput.value = '';
+                showToast('Account created successfully!', 'success');
+            } catch (error) {
+                showToast(`Sign up failed: ${error.message}`, 'error');
+            }
+        });
+    }
+
+    // Close modal when clicking outside
+    if (emailAuthModal) {
+        emailAuthModal.addEventListener('click', (e) => {
+            if (e.target === emailAuthModal) {
+                emailAuthModal.classList.add('hidden');
+            }
+        });
+    }thBtn = document.getElementById('show-email-auth');
     console.log('🚀 MAIN.JS: showEmailAuthBtn element:', showEmailAuthBtn);
 
     // Main page auth elements

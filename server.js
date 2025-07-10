@@ -1,4 +1,3 @@
-
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -75,7 +74,7 @@ app.post('/api/generate-tour', async (req, res) => {
     }
 
     const { destination, focus } = req.body;
-    
+
     if (!destination || !focus) {
       return res.status(400).json({ error: 'Destination and focus are required' });
     }
@@ -85,17 +84,17 @@ app.post('/api/generate-tour', async (req, res) => {
 
     const prompt = `
       Create a 5-stop virtual tour itinerary for "${destination}" with focus on "${focus}".
-      
+
       For each stop, provide:
       1. "locationName": Specific landmark/attraction name
       2. "briefDescription": One engaging sentence about this location
       3. "language": The primary language code (e.g., "en", "es", "fr") for pronunciation
       4. "languageRegion": The region code (e.g., "US", "GB", "MX") for accent
-      
+
       Ensure locations are well-known, publicly accessible places with Street View coverage.
-      
+
       Respond with ONLY a valid JSON array.
-      
+
       Example:
       [
         {
@@ -151,13 +150,13 @@ app.post('/api/generate-speech', async (req, res) => {
     }
 
     const { text, language = 'en', languageRegion = 'US' } = req.body;
-    
+
     if (!text) {
       return res.status(400).json({ error: 'Text is required' });
     }
 
     const languageCode = `${language}-${languageRegion}`;
-    
+
     const requestBody = {
       input: { text },
       voice: { 
@@ -188,13 +187,13 @@ app.post('/api/generate-speech', async (req, res) => {
 
     const data = await response.json();
     const audioContent = Buffer.from(data.audioContent, 'base64');
-    
+
     res.set({
       'Content-Type': 'audio/mpeg',
       'Content-Length': audioContent.length,
       'Cache-Control': 'public, max-age=3600'
     });
-    
+
     res.send(audioContent);
 
   } catch (error) {
@@ -212,17 +211,17 @@ app.get('/api/images/:query', async (req, res) => {
 
     const { query } = req.params;
     const url = `${CUSTOM_SEARCH_API_URL}?key=${GOOGLE_API_KEY}&cx=${CUSTOM_SEARCH_ENGINE_ID}&q=${encodeURIComponent(query)}&searchType=image&num=8`;
-    
+
     const response = await fetch(url, {
       headers: {
         'Referer': 'https://aitours.top'
       }
     });
     if (!response.ok) throw new Error('Image search failed');
-    
+
     const data = await response.json();
     const images = data.items ? data.items.map(item => ({ type: 'image', url: item.link })) : [];
-    
+
     res.json(images);
   } catch (error) {
     console.error('Error fetching images:', error);
@@ -239,17 +238,17 @@ app.get('/api/videos/:query', async (req, res) => {
 
     const { query } = req.params;
     const url = `${YOUTUBE_API_URL}?key=${GOOGLE_API_KEY}&part=snippet&q=${encodeURIComponent(query + " tour")}&type=video&maxResults=4&videoEmbeddable=true`;
-    
+
     const response = await fetch(url, {
       headers: {
         'Referer': 'https://aitours.top'
       }
     });
     if (!response.ok) throw new Error('YouTube search failed');
-    
+
     const data = await response.json();
     const videos = data.items ? data.items.map(item => ({ type: 'video', videoId: item.id.videoId })) : [];
-    
+
     res.json(videos);
   } catch (error) {
     console.error('Error fetching videos:', error);
@@ -266,7 +265,7 @@ app.get('/api/local-info/:query', async (req, res) => {
 
     const { query } = req.params;
     const prompt = `Provide local information for ${query}. Respond with JSON containing "weather" (object with "temp_c", "temp_f", "condition") and "timezone" (IANA timezone).`;
-    
+
     const response = await fetch(GEMINI_API_URL, {
       method: 'POST',
       headers: { 
@@ -278,15 +277,15 @@ app.get('/api/local-info/:query', async (req, res) => {
         generationConfig: { temperature: 0, response_mime_type: "application/json" }
       }),
     });
-    
+
     if (!response.ok) throw new Error('Local info request failed');
-    
+
     const data = await response.json();
     const info = JSON.parse(data.candidates[0].content.parts[0].text);
-    
+
     let weatherText = 'Unavailable';
     let weatherEmoji = '❔';
-    
+
     if (info.weather && info.weather.condition) {
       const condition = info.weather.condition.toLowerCase();
       if (condition.includes('sun') || condition.includes('clear')) weatherEmoji = '☀️';
@@ -295,15 +294,15 @@ app.get('/api/local-info/:query', async (req, res) => {
       else if (condition.includes('storm')) weatherEmoji = '⛈️';
       else if (condition.includes('snow')) weatherEmoji = '❄️';
       else if (condition.includes('fog')) weatherEmoji = '🌫️';
-      
+
       weatherText = `${info.weather.temp_f}°F / ${info.weather.temp_c}°C, ${info.weather.condition}`;
     }
-    
+
     res.json({
       weather: { text: weatherText, emoji: weatherEmoji },
       timezone: info.timezone || null
     });
-    
+
   } catch (error) {
     console.error('Error fetching local info:', error);
     res.status(500).json({ error: 'Failed to fetch local info' });
@@ -319,7 +318,7 @@ app.get('/api/news/:query', async (req, res) => {
 
     const { query } = req.params;
     const prompt = `List 3-4 major local news outlets for ${query}. Respond with JSON array of objects with "name" and "url" properties.`;
-    
+
     const response = await fetch(GEMINI_API_URL, {
       method: 'POST',
       headers: { 
@@ -331,12 +330,12 @@ app.get('/api/news/:query', async (req, res) => {
         generationConfig: { temperature: 0.2, response_mime_type: "application/json" }
       }),
     });
-    
+
     if (!response.ok) throw new Error('News request failed');
-    
+
     const data = await response.json();
     const news = JSON.parse(data.candidates[0].content.parts[0].text);
-    
+
     res.json(news);
   } catch (error) {
     console.error('Error fetching news:', error);
@@ -356,9 +355,18 @@ app.get('/firebase-config', (req, res) => {
   });
 });
 
-// Serve the main HTML file
+// Serve static files from current directory
+app.use(express.static('.'));
+
+// Serve index.html with environment variables
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+    const fs = require('fs');
+    const path = require('path');
+
+    let html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+    html = html.replace('{{GOOGLE_API_KEY}}', process.env.GOOGLE_API_KEY || '');
+
+    res.send(html);
 });
 
 // Start server
