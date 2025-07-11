@@ -533,7 +533,7 @@ function generateRegionalMusicPrompt(location, style) {
 async function generateMusicWithLyria(prompt, duration) {
     try {
         // Google Cloud Vertex AI Lyria API call
-        const response = await fetch('https://us-central1-aiplatform.googleapis.com/v1/projects/YOUR_PROJECT_ID/locations/us-central1/publishers/google/models/lyria-music:predict', {
+        const response = await fetch('https://us-central1-aiplatform.googleapis.com/v1/projects/gen-lang-client-0067202879/locations/us-central1/publishers/google/models/lyria-music:predict', {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${process.env.GOOGLE_CLOUD_TOKEN}`,
