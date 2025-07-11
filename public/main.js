@@ -1704,8 +1704,10 @@ function displayMessages(messages, chatroomData, currentUser) {
     const isCurrentUserAdmin = chatroomService.isAdmin(chatroomData, currentUser.uid);
 
     messages.forEach(message => {
+        const isOwnMessage = message.userId === currentUser.uid;
+        
         const messageDiv = document.createElement('div');
-        messageDiv.className = 'flex items-start gap-3 p-2 hover:bg-slate-800 rounded group';
+        messageDiv.className = `flex items-start gap-3 p-2 hover:bg-slate-800 rounded group ${isOwnMessage ? 'flex-row-reverse' : ''}`;
 
         const avatar = document.createElement('img');
         avatar.src = message.userPhoto || 'https://via.placeholder.com/32';
@@ -1713,13 +1715,13 @@ function displayMessages(messages, chatroomData, currentUser) {
         avatar.alt = message.userName;
 
         const content = document.createElement('div');
-        content.className = 'flex-1 min-w-0';
+        content.className = `flex-1 min-w-0 ${isOwnMessage ? 'text-right' : ''}`;
 
         const header = document.createElement('div');
-        header.className = 'flex items-center gap-2 mb-1';
+        header.className = `flex items-center gap-2 mb-1 ${isOwnMessage ? 'flex-row-reverse' : ''}`;
 
         const userName = document.createElement('span');
-        userName.className = 'font-semibold text-cyan-400 text-sm';
+        userName.className = `font-semibold text-sm ${isOwnMessage ? 'text-green-400' : 'text-cyan-400'}`;
         userName.textContent = message.userName;
 
         // Add admin badges
@@ -1755,7 +1757,7 @@ function displayMessages(messages, chatroomData, currentUser) {
         }
 
         const messageText = document.createElement('div');
-        messageText.className = 'text-gray-200 text-sm break-words';
+        messageText.className = `text-gray-200 text-sm break-words ${isOwnMessage ? 'bg-cyan-600/30 p-2 rounded-lg inline-block max-w-xs ml-auto' : ''}`;
         messageText.textContent = message.text;
 
         header.appendChild(userName);
@@ -1948,20 +1950,45 @@ async function sendAIMessage() {
 
 function addAIMessage(message, sender, isLoading = false) {
     const messageId = Date.now().toString();
+    const user = authService.getCurrentUser();
+    const isUserMessage = sender === 'user';
+    
     const messageDiv = document.createElement('div');
-    messageDiv.className = `flex items-start gap-3 p-2 rounded ${sender === 'user' ? 'bg-cyan-500/20 ml-8' : 'bg-slate-800 mr-8'}`;
+    messageDiv.className = `flex items-start gap-3 p-2 rounded ${isUserMessage ? 'bg-cyan-500/20 ml-8 flex-row-reverse' : 'bg-slate-800 mr-8'}`;
     messageDiv.id = `ai-message-${messageId}`;
 
     const avatar = document.createElement('div');
-    avatar.className = 'w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0';
-    avatar.textContent = sender === 'user' ? '👤' : '🤖';
-    avatar.style.backgroundColor = sender === 'user' ? '#0891b2' : '#374151';
+    avatar.className = 'w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden';
+    
+    if (isUserMessage && user) {
+        if (user.photoURL) {
+            const img = document.createElement('img');
+            img.src = user.photoURL;
+            img.className = 'w-full h-full object-cover';
+            img.alt = user.displayName || 'User';
+            avatar.appendChild(img);
+        } else {
+            avatar.textContent = '👤';
+            avatar.style.backgroundColor = '#0891b2';
+        }
+    } else {
+        avatar.textContent = '🤖';
+        avatar.style.backgroundColor = '#374151';
+    }
 
     const content = document.createElement('div');
-    content.className = 'flex-1 min-w-0';
+    content.className = `flex-1 min-w-0 ${isUserMessage ? 'text-right' : ''}`;
+    
+    // Add user name for user messages
+    if (isUserMessage && user) {
+        const nameDiv = document.createElement('div');
+        nameDiv.className = 'text-xs text-green-400 mb-1 font-medium';
+        nameDiv.textContent = user.displayName || user.email || 'You';
+        content.appendChild(nameDiv);
+    }
     
     const messageText = document.createElement('div');
-    messageText.className = 'text-gray-200 text-sm break-words';
+    messageText.className = `text-gray-200 text-sm break-words ${isUserMessage ? 'bg-cyan-600/30 p-2 rounded-lg inline-block max-w-xs ml-auto' : ''}`;
     messageText.textContent = message;
     
     if (isLoading) {

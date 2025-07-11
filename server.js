@@ -145,16 +145,47 @@ app.post('/api/generate-tour', async (req, res) => {
 // Area AI chat endpoint
 app.post('/api/area-ai-chat', async (req, res) => {
     try {
+        if (!fetch) {
+            return res.status(503).json({ error: 'Server still initializing, please try again' });
+        }
+
         const { message, areaName, context } = req.body;
 
         if (!message || !areaName) {
             return res.status(400).json({ error: 'Message and area name are required' });
         }
 
-        // Create a comprehensive prompt for the AI
+        console.log('AI Chat request for:', areaName, 'Message:', message);
+
+        // First, get relevant search results for the area
+        let searchContext = '';
+        try {
+            const searchQuery = `${areaName} ${message} attractions tourism`;
+            const searchUrl = `${CUSTOM_SEARCH_API_URL}?key=${GOOGLE_API_KEY}&cx=919416415d49240b1&q=${encodeURIComponent(searchQuery)}&num=5`;
+            
+            const searchResponse = await fetch(searchUrl, {
+                headers: {
+                    'Referer': 'https://aitours.top'
+                }
+            });
+
+            if (searchResponse.ok) {
+                const searchData = await searchResponse.json();
+                if (searchData.items && searchData.items.length > 0) {
+                    searchContext = '\n\nRecent search results:\n' + 
+                        searchData.items.slice(0, 3).map(item => 
+                            `- ${item.title}: ${item.snippet}`
+                        ).join('\n');
+                }
+            }
+        } catch (searchError) {
+            console.log('Search failed, continuing without search context:', searchError.message);
+        }
+
+        // Create a comprehensive prompt for Gemini
         const prompt = `You are a knowledgeable local area guide AI assistant. You're helping someone who is virtually exploring ${areaName} through street view.
 
-Context: ${context}
+Context: ${context}${searchContext}
 
 The user is asking: "${message}"
 
@@ -167,38 +198,33 @@ Please provide a helpful, informative response about ${areaName}. Include specif
 - Hidden gems and local secrets
 - Current events or seasonal information when relevant
 
-Keep your response conversational, engaging, and under 200 words. If you don't have specific information about ${areaName}, provide general guidance about the type of area it is and suggest what kinds of things the user might look for.`;
+Keep your response conversational, engaging, and under 250 words. Use the search results context if available to provide current and accurate information. If you don't have specific information about ${areaName}, provide general guidance about the type of area it is and suggest what kinds of things the user might look for.
 
-        // Use OpenAI API (you'll need to set up your OpenAI API key)
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+Focus on being helpful and informative while maintaining a friendly, conversational tone.`;
+
+        const response = await fetch(GEMINI_API_URL, {
             method: 'POST',
-            headers: {
+            headers: { 
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+                'Referer': 'https://aitours.top'
             },
             body: JSON.stringify({
-                model: 'gpt-3.5-turbo',
-                messages: [
-                    {
-                        role: 'system',
-                        content: 'You are a helpful local area guide assistant. Provide informative, engaging responses about local areas, attractions, culture, and travel tips.'
-                    },
-                    {
-                        role: 'user',
-                        content: prompt
-                    }
-                ],
-                max_tokens: 300,
-                temperature: 0.7
-            })
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                    temperature: 0.7,
+                    maxOutputTokens: 400
+                }
+            }),
         });
 
         if (!response.ok) {
-            throw new Error('OpenAI API request failed');
+            const errorText = await response.text();
+            console.error('Gemini AI API Error:', response.status, errorText);
+            throw new Error(`Gemini AI API Error: ${response.status}`);
         }
 
         const data = await response.json();
-        const aiResponse = data.choices[0]?.message?.content || 'Sorry, I could not generate a response at this time.';
+        const aiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text || 'Sorry, I could not generate a response at this time.';
 
         res.json({ response: aiResponse });
 
