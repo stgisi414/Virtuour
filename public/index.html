@@ -142,22 +142,26 @@
         </div>
 
         
-        <div id="controls-container" class="invisible opacity-0 absolute z-10 transition-all duration-300 flex gap-4">
-            <button id="area-chat-button" class="bg-blue-500 hover:bg-blue-400 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-blue-400 transition-colors duration-300 flex items-center gap-2">
+        <div id="controls-container" class="invisible opacity-0 absolute z-10 transition-all duration-300 flex gap-2 sm:gap-4">
+            <button id="area-chat-button" class="bg-blue-500 hover:bg-blue-400 text-white font-bold p-3 sm:py-2 sm:px-4 rounded-lg shadow-lg border border-blue-400 transition-colors duration-300 flex items-center gap-2 min-w-[48px]" title="Area Chat">
                 💬
-                <span>Area Chat</span>
+                <span class="hidden sm:inline">Area Chat</span>
             </button>
-             <button id="exploreButton" class="bg-purple-500 hover:bg-purple-400 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-purple-400 transition-colors duration-300 flex items-center gap-2">
+            <button id="music-button" class="bg-green-500 hover:bg-green-400 text-white font-bold p-3 sm:py-2 sm:px-4 rounded-lg shadow-lg border border-green-400 transition-colors duration-300 flex items-center gap-2 min-w-[48px]" title="Toggle Music">
+                <span id="music-icon">🎵</span>
+                <span class="hidden sm:inline">Music</span>
+            </button>
+             <button id="exploreButton" class="bg-purple-500 hover:bg-purple-400 text-white font-bold p-3 sm:py-2 sm:px-4 rounded-lg shadow-lg border border-purple-400 transition-colors duration-300 flex items-center gap-2 min-w-[48px]" title="Explore Area">
                 🧭
-                <span>Explore Area</span>
+                <span class="hidden sm:inline">Explore Area</span>
             </button>
-            <button id="returnToTourButton" class="bg-orange-500 hover:bg-orange-400 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-orange-400 transition-colors duration-300 flex items-center gap-2">
+            <button id="returnToTourButton" class="bg-orange-500 hover:bg-orange-400 text-white font-bold p-3 sm:py-2 sm:px-4 rounded-lg shadow-lg border border-orange-400 transition-colors duration-300 flex items-center gap-2 min-w-[48px]" title="Return to Tour">
                 ↩️
-                <span>Return to Tour</span>
+                <span class="hidden sm:inline">Return to Tour</span>
             </button>
-            <button id="pauseTourButton" class="bg-red-500 hover:bg-red-400 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-red-400 transition-colors duration-300 flex items-center gap-2">
+            <button id="pauseTourButton" class="bg-red-500 hover:bg-red-400 text-white font-bold p-3 sm:py-2 sm:px-4 rounded-lg shadow-lg border border-red-400 transition-colors duration-300 flex items-center gap-2 min-w-[48px]" title="Pause Tour">
                 <span id="pause-icon">⏸️</span>
-                <span id="pause-text">Pause Tour</span>
+                <span id="pause-text" class="hidden sm:inline">Pause Tour</span>
             </button>
         </div>
 

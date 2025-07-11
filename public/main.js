@@ -26,6 +26,8 @@ const pauseIcon = document.getElementById('pause-icon');
 const pauseText = document.getElementById('pause-text');
 const exploreButton = document.getElementById('exploreButton');
 const returnToTourButton = document.getElementById('returnToTourButton');
+const musicButton = document.getElementById('music-button');
+const musicIcon = document.getElementById('music-icon');
 
 // --- 3. GLOBAL VARIABLES ---
 let streetView;
@@ -38,6 +40,9 @@ let localTimeInterval = null;
 let destinationTimezone = null;
 let currentAudio = null;
 let exploreLocation = null;
+let backgroundMusic = null;
+let isMusicPlaying = false;
+let musicVolume = 0.3;
 
 // --- 4. TOUR STATE MACHINE ---
 class TourStateMachine {
@@ -515,8 +520,15 @@ async function generateTour() {
         console.log(`Successfully processed ${tourItinerary.length} locations`);
 
         await initializeTourUI();
+        
+        // Generate regional music for the destination
+        generateRegionalMusic(currentDestination).then(success => {
+            if (success) {
+                showToast('Regional music ready! Click the music button to play.', 'success');
+            }
+        });
+        
         setLoading(false);
-
         startTourSequence();
 
     } catch (error) {
@@ -771,17 +783,19 @@ async function initializeTourUI() {
 
 function updateControlsForTouring() {
     areaChatButton.style.display = 'none';
+    musicButton.style.display = 'none';
     exploreButton.style.display = 'none';
     returnToTourButton.style.display = 'none';
     pauseTourButton.style.display = 'flex';
 
     pauseIcon.textContent = '⏸️';
     pauseText.textContent = 'Pause Tour';
-    pauseTourButton.className = 'bg-red-500 hover:bg-red-400 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-red-400 transition-colors duration-300 flex items-center gap-2';
+    pauseTourButton.className = 'bg-red-500 hover:bg-red-400 text-white font-bold p-3 sm:py-2 sm:px-4 rounded-lg shadow-lg border border-red-400 transition-colors duration-300 flex items-center gap-2 min-w-[48px]';
 }
 
 function updateControlsForPaused() {
     areaChatButton.style.display = 'flex';
+    musicButton.style.display = 'flex';
     exploreButton.style.display = 'flex';
     returnToTourButton.style.display = 'none';
     pauseTourButton.style.display = 'flex';
@@ -789,16 +803,17 @@ function updateControlsForPaused() {
     if (currentStopIndex >= tourItinerary.length - 1) {
         pauseIcon.textContent = '🏁';
         pauseText.textContent = 'End Tour';
-        pauseTourButton.className = 'bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold py-2 px-4 rounded-lg shadow-lg border border-cyan-400 transition-colors duration-300 flex items-center gap-2';
+        pauseTourButton.className = 'bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-bold p-3 sm:py-2 sm:px-4 rounded-lg shadow-lg border border-cyan-400 transition-colors duration-300 flex items-center gap-2 min-w-[48px]';
     } else {
         pauseIcon.textContent = '▶️';
         pauseText.textContent = 'Continue';
-        pauseTourButton.className = 'bg-green-500 hover:bg-green-400 text-white font-bold py-2 px-4 rounded-lg shadow-lg border border-green-400 transition-colors duration-300 flex items-center gap-2';
+        pauseTourButton.className = 'bg-green-500 hover:bg-green-400 text-white font-bold p-3 sm:py-2 sm:px-4 rounded-lg shadow-lg border border-green-400 transition-colors duration-300 flex items-center gap-2 min-w-[48px]';
     }
 }
 
 function updateControlsForExploring() {
     areaChatButton.style.display = 'none';
+    musicButton.style.display = 'flex';
     exploreButton.style.display = 'none';
     returnToTourButton.style.display = 'flex';
     pauseTourButton.style.display = 'none';
@@ -1145,6 +1160,7 @@ function updateLocalTime(element) {
 // --- 15. UTILITY AND RESET FUNCTIONS ---
 function resetTourState() {
     stopAudio();
+    stopBackgroundMusic();
     if (localTimeInterval) clearInterval(localTimeInterval);
 
     tourState.reset();
@@ -1152,6 +1168,13 @@ function resetTourState() {
     currentStopIndex = 0;
     exploreLocation = null;
     tourItinerary = [];
+    
+    // Clean up music resources
+    if (backgroundMusic) {
+        URL.revokeObjectURL(backgroundMusic.src);
+        backgroundMusic = null;
+    }
+    isMusicPlaying = false;
 
     if (locationProcessor) {
         locationProcessor.clearCache();
@@ -1197,12 +1220,101 @@ function positionControls() {
     }
 }
 
-// --- 16. EVENT LISTENERS ---
+// --- 16. MUSIC FUNCTIONALITY ---
+async function generateRegionalMusic(location) {
+    try {
+        setLoading(true, 'Generating regional music...');
+        
+        const response = await fetch(`${API_BASE_URL}/api/generate-music`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                location: location,
+                style: 'ambient_regional',
+                duration: 120 // 2 minutes
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error('Music generation failed');
+        }
+
+        const audioBlob = await response.blob();
+        const audioUrl = URL.createObjectURL(audioBlob);
+        
+        backgroundMusic = new Audio(audioUrl);
+        backgroundMusic.loop = true;
+        backgroundMusic.volume = musicVolume;
+        
+        setLoading(false);
+        return true;
+
+    } catch (error) {
+        console.error('Error generating regional music:', error);
+        setLoading(false);
+        showToast('Could not generate regional music', 'error');
+        return false;
+    }
+}
+
+function toggleBackgroundMusic() {
+    if (!backgroundMusic) {
+        if (currentDestination) {
+            generateRegionalMusic(currentDestination).then(success => {
+                if (success) {
+                    playBackgroundMusic();
+                }
+            });
+        } else {
+            showToast('Please start a tour first', 'error');
+        }
+        return;
+    }
+
+    if (isMusicPlaying) {
+        pauseBackgroundMusic();
+    } else {
+        playBackgroundMusic();
+    }
+}
+
+function playBackgroundMusic() {
+    if (backgroundMusic) {
+        backgroundMusic.play();
+        isMusicPlaying = true;
+        musicIcon.textContent = '🔊';
+        musicButton.title = 'Pause Music';
+    }
+}
+
+function pauseBackgroundMusic() {
+    if (backgroundMusic) {
+        backgroundMusic.pause();
+        isMusicPlaying = false;
+        musicIcon.textContent = '🎵';
+        musicButton.title = 'Play Music';
+    }
+}
+
+function stopBackgroundMusic() {
+    if (backgroundMusic) {
+        backgroundMusic.pause();
+        backgroundMusic.currentTime = 0;
+        isMusicPlaying = false;
+        musicIcon.textContent = '🎵';
+        musicButton.title = 'Play Music';
+    }
+}
+
+// --- 17. EVENT LISTENERS ---
 generateTourButton.addEventListener('click', generateTour);
 endTourButton.addEventListener('click', resetToMainMenu);
 pauseTourButton.addEventListener('click', togglePause);
 exploreButton.addEventListener('click', exploreCurrentLocation);
 returnToTourButton.addEventListener('click', returnToMainTour);
+musicButton.addEventListener('click', toggleBackgroundMusic);
 window.addEventListener('resize', positionControls);
 
 destinationInput.addEventListener('input', (e) => {

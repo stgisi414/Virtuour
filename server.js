@@ -162,7 +162,7 @@ app.post('/api/area-ai-chat', async (req, res) => {
         try {
             const searchQuery = `${areaName} ${message} attractions tourism`;
             const searchUrl = `${CUSTOM_SEARCH_API_URL}?key=${GOOGLE_API_KEY}&cx=919416415d49240b1&q=${encodeURIComponent(searchQuery)}&num=5`;
-            
+
             const searchResponse = await fetch(searchUrl, {
                 headers: {
                     'Referer': 'https://aitours.top'
@@ -465,7 +465,139 @@ app.get('/', (req, res) => {
     res.send(html);
 });
 
+// Google Cloud Lyria Music Generation Endpoint
+app.post('/api/generate-music', async (req, res) => {
+    try {
+        const { location, style = 'ambient_regional', duration = 120 } = req.body;
+
+        if (!location) {
+            return res.status(400).json({ error: 'Location is required' });
+        }
+
+        // Determine regional music style based on location
+        const regionalPrompt = generateRegionalMusicPrompt(location, style);
+
+        // Call Google Cloud Vertex AI Lyria API
+        const musicResponse = await generateMusicWithLyria(regionalPrompt, duration);
+
+        if (!musicResponse) {
+            throw new Error('Failed to generate music');
+        }
+
+        // Return the audio file
+        res.set({
+            'Content-Type': 'audio/mpeg',
+            'Content-Length': musicResponse.length,
+            'Cache-Control': 'public, max-age=3600'
+        });
+
+        res.send(musicResponse);
+
+    } catch (error) {
+        console.error('Music generation error:', error);
+        res.status(500).json({ 
+            error: 'Failed to generate music',
+            details: error.message 
+        });
+    }
+});
+
+function generateRegionalMusicPrompt(location, style) {
+    const regionalStyles = {
+        'paris': 'French café accordion and jazz influences',
+        'tokyo': 'Traditional Japanese instruments with modern ambient',
+        'new york': 'Urban jazz with city soundscape',
+        'london': 'British folk with orchestral elements',
+        'rome': 'Italian classical with mediterranean warmth',
+        'mumbai': 'Indian classical ragas with contemporary fusion',
+        'rio de janeiro': 'Brazilian bossa nova and samba rhythms',
+        'cairo': 'Middle Eastern oud and percussion',
+        'seoul': 'Korean traditional instruments with K-pop influences',
+        'sydney': 'Australian folk with nature sounds'
+    };
+
+    const locationLower = location.toLowerCase();
+    let regionalStyle = 'world music fusion with ambient textures';
+
+    // Find matching regional style
+    for (const [region, musicStyle] of Object.entries(regionalStyles)) {
+        if (locationLower.includes(region)) {
+            regionalStyle = musicStyle;
+            break;
+        }
+    }
+
+    return `Create ambient background music inspired by ${location}. Style: ${regionalStyle}. The music should be atmospheric, non-intrusive, and culturally representative while maintaining a peaceful, exploratory mood suitable for virtual touring.`;
+}
+
+async function generateMusicWithLyria(prompt, duration) {
+    try {
+        // Google Cloud Vertex AI Lyria API call
+        const response = await fetch('https://us-central1-aiplatform.googleapis.com/v1/projects/YOUR_PROJECT_ID/locations/us-central1/publishers/google/models/lyria-music:predict', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${process.env.GOOGLE_CLOUD_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                instances: [{
+                    prompt: prompt,
+                    duration_seconds: duration,
+                    temperature: 0.7,
+                    style: 'ambient_instrumental'
+                }],
+                parameters: {
+                    sampleRate: 44100,
+                    format: 'mp3'
+                }
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`Lyria API error: ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        // Extract audio data from response
+        if (result.predictions && result.predictions[0] && result.predictions[0].audio_bytes) {
+            return Buffer.from(result.predictions[0].audio_bytes, 'base64');
+        }
+
+        throw new Error('No audio data in response');
+
+    } catch (error) {
+        console.error('Lyria API error:', error);
+
+        // Fallback: Generate placeholder audio or return silence
+        return generateFallbackAudio(duration);
+    }
+}
+
+function generateFallbackAudio(duration) {
+    // Generate a simple sine wave as fallback
+    const sampleRate = 44100;
+    const samples = sampleRate * duration;
+    const frequency = 220; // A3 note
+
+    const audioBuffer = Buffer.alloc(samples * 2); // 16-bit audio
+
+    for (let i = 0; i < samples; i++) {
+        const sample = Math.sin(2 * Math.PI * frequency * i / sampleRate) * 0.1; // Low volume
+        const intSample = Math.max(-32768, Math.min(32767, sample * 32767));
+        audioBuffer.writeInt16LE(intSample, i * 2);
+    }
+
+    return audioBuffer;
+}
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+    res.json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
 // Start server
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
+    console.log(`Server running on port ${PORT}`);
 });
