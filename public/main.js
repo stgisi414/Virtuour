@@ -1242,11 +1242,35 @@ async function generateRegionalMusic(location) {
         }
 
         const audioBlob = await response.blob();
+        
+        // Validate the blob has content and is audio
+        if (audioBlob.size === 0) {
+            throw new Error('Empty audio file received');
+        }
+
+        // Check if it's a valid audio type
+        if (!audioBlob.type.startsWith('audio/')) {
+            console.warn('Received non-audio content type:', audioBlob.type);
+            throw new Error('Invalid audio format');
+        }
+
         const audioUrl = URL.createObjectURL(audioBlob);
         
         backgroundMusic = new Audio(audioUrl);
         backgroundMusic.loop = true;
         backgroundMusic.volume = musicVolume;
+        
+        // Add error handling for audio playback
+        backgroundMusic.onerror = (e) => {
+            console.error('Audio playback error:', e);
+            showToast('Audio playback failed', 'error');
+            // Clean up
+            URL.revokeObjectURL(audioUrl);
+            backgroundMusic = null;
+            isMusicPlaying = false;
+            musicIcon.textContent = '🎵';
+            musicButton.title = 'Play Music';
+        };
         
         setLoading(false);
         return true;
@@ -1254,9 +1278,75 @@ async function generateRegionalMusic(location) {
     } catch (error) {
         console.error('Error generating regional music:', error);
         setLoading(false);
-        showToast('Could not generate regional music', 'error');
-        return false;
+        
+        // Try to create a fallback ambient sound
+        try {
+            backgroundMusic = createFallbackAmbientAudio();
+            showToast('Using ambient fallback music', 'info');
+            return true;
+        } catch (fallbackError) {
+            console.error('Fallback audio creation failed:', fallbackError);
+            showToast('Music unavailable for this session', 'error');
+            return false;
+        }
     }
+}
+
+function createFallbackAmbientAudio() {
+    // Create a simple ambient audio using Web Audio API
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const duration = 30; // 30 seconds, will loop
+    const sampleRate = audioContext.sampleRate;
+    const frameCount = sampleRate * duration;
+    
+    const buffer = audioContext.createBuffer(2, frameCount, sampleRate);
+    
+    // Generate ambient noise
+    for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
+        const channelData = buffer.getChannelData(channel);
+        for (let i = 0; i < frameCount; i++) {
+            // Create soft pink noise with gentle waves
+            const time = i / sampleRate;
+            const wave1 = Math.sin(2 * Math.PI * 0.1 * time) * 0.1;
+            const wave2 = Math.sin(2 * Math.PI * 0.05 * time) * 0.05;
+            const noise = (Math.random() * 2 - 1) * 0.02;
+            channelData[i] = wave1 + wave2 + noise;
+        }
+    }
+    
+    const source = audioContext.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+    
+    const gainNode = audioContext.createGain();
+    gainNode.gain.value = musicVolume;
+    
+    source.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    // Create a wrapper object that mimics Audio API
+    const audioWrapper = {
+        play: () => {
+            if (audioContext.state === 'suspended') {
+                audioContext.resume();
+            }
+            source.start(0);
+            return Promise.resolve();
+        },
+        pause: () => {
+            source.stop();
+        },
+        set volume(value) {
+            gainNode.gain.value = value;
+        },
+        get volume() {
+            return gainNode.gain.value;
+        },
+        loop: true,
+        onerror: null
+    };
+    
+    return audioWrapper;
 }
 
 function toggleBackgroundMusic() {
@@ -1282,10 +1372,28 @@ function toggleBackgroundMusic() {
 
 function playBackgroundMusic() {
     if (backgroundMusic) {
-        backgroundMusic.play();
-        isMusicPlaying = true;
-        musicIcon.textContent = '🔊';
-        musicButton.title = 'Pause Music';
+        try {
+            const playPromise = backgroundMusic.play();
+            
+            // Handle play promise properly
+            if (playPromise !== undefined) {
+                playPromise.then(() => {
+                    isMusicPlaying = true;
+                    musicIcon.textContent = '🔊';
+                    musicButton.title = 'Pause Music';
+                }).catch(error => {
+                    console.error('Audio play failed:', error);
+                    showToast('Could not play music - try clicking the music button after user interaction', 'error');
+                });
+            } else {
+                isMusicPlaying = true;
+                musicIcon.textContent = '🔊';
+                musicButton.title = 'Pause Music';
+            }
+        } catch (error) {
+            console.error('Error playing background music:', error);
+            showToast('Music playback failed', 'error');
+        }
     }
 }
 

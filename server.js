@@ -481,7 +481,10 @@ app.post('/api/generate-music', async (req, res) => {
         const musicResponse = await generateMusicWithLyria(regionalPrompt, duration);
 
         if (!musicResponse) {
-            throw new Error('Failed to generate music');
+            return res.status(503).json({ 
+                error: 'Music generation service unavailable',
+                fallback: true 
+            });
         }
 
         // Return the audio file
@@ -569,26 +572,15 @@ async function generateMusicWithLyria(prompt, duration) {
     } catch (error) {
         console.error('Lyria API error:', error);
 
-        // Fallback: Generate placeholder audio or return silence
-        return generateFallbackAudio(duration);
+        // Fallback: Return null and let client handle fallback
+        return null;
     }
 }
 
 function generateFallbackAudio(duration) {
-    // Generate a simple sine wave as fallback
-    const sampleRate = 44100;
-    const samples = sampleRate * duration;
-    const frequency = 220; // A3 note
-
-    const audioBuffer = Buffer.alloc(samples * 2); // 16-bit audio
-
-    for (let i = 0; i < samples; i++) {
-        const sample = Math.sin(2 * Math.PI * frequency * i / sampleRate) * 0.1; // Low volume
-        const intSample = Math.max(-32768, Math.min(32767, sample * 32767));
-        audioBuffer.writeInt16LE(intSample, i * 2);
-    }
-
-    return audioBuffer;
+    // Return null instead of invalid audio buffer
+    // The client will handle the fallback audio generation
+    return null;
 }
 
 // Health check endpoint
