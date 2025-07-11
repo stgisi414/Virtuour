@@ -14,16 +14,6 @@
           "order": "DESCENDING"
         }
       ]
-    },
-    {
-      "collectionGroup": "chatrooms",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "lastActivity",
-          "order": "DESCENDING"
-        }
-      ]
     }
   ],
   "fieldOverrides": []
