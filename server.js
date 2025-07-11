@@ -468,11 +468,13 @@ app.get('/', (req, res) => {
 // Google Cloud Lyria Music Generation Endpoint
 app.post('/api/generate-music', async (req, res) => {
     try {
-        const { location, style = 'ambient_regional', duration = 120 } = req.body;
+        const { location, style = 'ambient_regional', duration = 30 } = req.body;
 
         if (!location) {
             return res.status(400).json({ error: 'Location is required' });
         }
+
+        console.log(`Generating music for location: ${location}`);
 
         // Determine regional music style based on location
         const regionalPrompt = generateRegionalMusicPrompt(location, style);
@@ -481,9 +483,11 @@ app.post('/api/generate-music', async (req, res) => {
         const musicResponse = await generateMusicWithLyria(regionalPrompt, duration);
 
         if (!musicResponse) {
+            console.log('Lyria API unavailable, returning fallback response');
             return res.status(503).json({ 
-                error: 'Music generation service unavailable',
-                fallback: true 
+                error: 'Music generation service temporarily unavailable. Please try again later.',
+                fallback: true,
+                suggestion: 'You can continue exploring without background music or try again in a few moments.'
             });
         }
 
@@ -498,9 +502,10 @@ app.post('/api/generate-music', async (req, res) => {
 
     } catch (error) {
         console.error('Music generation error:', error);
-        res.status(500).json({ 
-            error: 'Failed to generate music',
-            details: error.message 
+        res.status(503).json({ 
+            error: 'Music generation service temporarily unavailable',
+            fallback: true,
+            suggestion: 'You can continue exploring without background music.'
         });
     }
 });
@@ -535,44 +540,62 @@ function generateRegionalMusicPrompt(location, style) {
 
 async function generateMusicWithLyria(prompt, duration) {
     try {
-        // Google Cloud Vertex AI Lyria API call
-        const response = await fetch('https://us-central1-aiplatform.googleapis.com/v1/projects/gen-lang-client-0067202879/locations/us-central1/publishers/google/models/lyria-music:predict', {
+        // Check if we have the required environment variables
+        if (!process.env.GOOGLE_CLOUD_PROJECT_ID) {
+            console.log('Google Cloud Project ID not configured, returning fallback');
+            return null;
+        }
+
+        // Use the service account key or default credentials
+        let authToken;
+        if (GOOGLE_TTS_KEY && GOOGLE_TTS_KEY.startsWith('{')) {
+            // If we have service account credentials, we need to get an access token
+            console.log('Service account authentication not implemented for Lyria, using fallback');
+            return null;
+        } else if (process.env.GOOGLE_CLOUD_TOKEN) {
+            authToken = process.env.GOOGLE_CLOUD_TOKEN;
+        } else {
+            console.log('No valid authentication token for Lyria API, using fallback');
+            return null;
+        }
+
+        const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
+        const apiUrl = `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/us-central1/publishers/google/models/musiclm:predict`;
+
+        const response = await fetch(apiUrl, {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${process.env.GOOGLE_CLOUD_TOKEN}`,
-                'Content-Type': 'application/json'
+                'Authorization': `Bearer ${authToken}`,
+                'Content-Type': 'application/json',
+                'Referer': 'https://aitours.top'
             },
             body: JSON.stringify({
                 instances: [{
                     prompt: prompt,
-                    duration_seconds: duration,
-                    temperature: 0.7,
-                    style: 'ambient_instrumental'
-                }],
-                parameters: {
-                    sampleRate: 44100,
-                    format: 'mp3'
-                }
+                    duration_seconds: Math.min(duration, 30), // Limit to 30 seconds for free tier
+                    temperature: 0.7
+                }]
             })
         });
 
         if (!response.ok) {
-            throw new Error(`Lyria API error: ${response.status}`);
+            const errorText = await response.text();
+            console.error(`Lyria API error: ${response.status} - ${errorText}`);
+            return null;
         }
 
         const result = await response.json();
 
         // Extract audio data from response
-        if (result.predictions && result.predictions[0] && result.predictions[0].audio_bytes) {
-            return Buffer.from(result.predictions[0].audio_bytes, 'base64');
+        if (result.predictions && result.predictions[0] && result.predictions[0].audio_content) {
+            return Buffer.from(result.predictions[0].audio_content, 'base64');
         }
 
-        throw new Error('No audio data in response');
+        console.log('No audio data in Lyria response, using fallback');
+        return null;
 
     } catch (error) {
         console.error('Lyria API error:', error);
-
-        // Fallback: Return null and let client handle fallback
         return null;
     }
 }
