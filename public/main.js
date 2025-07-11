@@ -1511,35 +1511,6 @@ async function getProperDestinationName(userInput) {
 }
 
 // Get area chat functionality
-function getAreaChatId() {
-    // Try multiple approaches to determine area
-    if (tourState.currentLocation && tourState.currentLocation.area) {
-        const areaId = tourState.currentLocation.area.toLowerCase().replace(/[^a-zA-Z0-9_-]/g, '-').substring(0, 50);
-        console.log('Using area from tour state:', areaId);
-        return areaId.length >= 3 ? areaId : 'general-seoul';
-    }
-
-    if (tourState.currentLocation && tourState.currentLocation.name) {
-        const areaId = tourState.currentLocation.name.toLowerCase().replace(/[^a-zA-Z0-9_-]/g, '-').substring(0, 50);
-        console.log('Using location name from tour state:', areaId);
-        return areaId.length >= 3 ? areaId : 'general-seoul';
-    }
-
-    // Check URL parameters
-    const urlParams = new URLSearchParams(window.location.search);
-    const areaParam = urlParams.get('area');
-    if (areaParam) {
-        const areaId = areaParam.toLowerCase().replace(/[^a-zA-Z0-9_-]/g, '-').substring(0, 50);
-        console.log('Using area from URL parameter:', areaId);
-        return areaId.length >= 3 ? areaId : 'general-seoul';
-    }
-
-    // Default fallback
-    console.log('No specific area found, using default');
-    return 'general-seoul';
-}
-
-// Chat integration
 async function openAreaChat() {
     const user = authService.getCurrentUser();
     if (!user) {
@@ -1553,20 +1524,16 @@ async function openAreaChat() {
     try {
         let areaId, areaName;
 
-        if (tourState.state === 'paused' && currentStopIndex >= 0 && tourItinerary.length > 0) {
-            const currentLocation = tourItinerary[currentStopIndex];
-            areaId = currentLocation.locationName.toLowerCase().replace(/[^a-z0-9]/g, '');
-            areaName = currentLocation.locationName;
-        } else {
-            // Use current destination or search input as fallback
-            let searchValue = currentDestination || destinationInput.value.trim();
-            if (!searchValue) {
-                showToast('Please enter a destination or start a tour first', 'error');
-                return;
-            }
-            areaId = searchValue.toLowerCase().replace(/[^a-z0-9]/g, '');
-            areaName = searchValue;
+        // Always use the main destination (city) for chat, not specific tour locations
+        let searchValue = currentDestination || destinationInput.value.trim();
+        if (!searchValue) {
+            showToast('Please enter a destination first', 'error');
+            return;
         }
+
+        // Clean the area ID for consistent chat rooms
+        areaId = searchValue.toLowerCase().replace(/[^a-z0-9]/g, '');
+        areaName = searchValue;
 
         if (!areaId || areaId.length < 3) {
             showToast('Could not determine the area chat ID.', 'error');
@@ -1588,8 +1555,9 @@ async function openAreaChat() {
             displayMessages(messages, chatroomData, user);
         });
 
-        // Update UI based on user permissions
-        await updateChatPermissions(areaId, user);
+        // Setup message input immediately after opening chat
+        const chatroomData = await chatroomService.getChatroomData(areaId);
+        setupMessageInput(user, chatroomData);
 
     } catch (error) {
         console.error('Error opening area chat:', error);
@@ -1998,3 +1966,5 @@ chatroomModal.addEventListener('click', (e) => {
         closeAreaChat();
     }
 });
+
+// The code was edited to ensure chat is for the destination area, and to ensure the input area is created properly.
