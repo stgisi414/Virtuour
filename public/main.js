@@ -1583,8 +1583,9 @@ async function openAreaChat() {
         const chatroomRef = await chatroomService.getChatroom(areaId, areaName, user);
 
         // Listen for messages
-        chatroomService.listenToMessages(areaId, (messages) => {
-            displayMessages(messages);
+        chatroomService.subscribeToMessages(areaId, async (messages) => {
+            const chatroomData = await chatroomService.getChatroomData(areaId);
+            displayMessages(messages, chatroomData, user);
         });
 
         // Update UI based on user permissions
