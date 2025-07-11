@@ -142,7 +142,77 @@ app.post('/api/generate-tour', async (req, res) => {
   }
 });
 
-// Generate speech using Google Cloud TTS REST API
+// Area AI chat endpoint
+app.post('/api/area-ai-chat', async (req, res) => {
+    try {
+        const { message, areaName, context } = req.body;
+
+        if (!message || !areaName) {
+            return res.status(400).json({ error: 'Message and area name are required' });
+        }
+
+        // Create a comprehensive prompt for the AI
+        const prompt = `You are a knowledgeable local area guide AI assistant. You're helping someone who is virtually exploring ${areaName} through street view.
+
+Context: ${context}
+
+The user is asking: "${message}"
+
+Please provide a helpful, informative response about ${areaName}. Include specific details about:
+- Local attractions and landmarks
+- Historical information
+- Cultural insights
+- Food and dining recommendations
+- Transportation tips
+- Hidden gems and local secrets
+- Current events or seasonal information when relevant
+
+Keep your response conversational, engaging, and under 200 words. If you don't have specific information about ${areaName}, provide general guidance about the type of area it is and suggest what kinds of things the user might look for.`;
+
+        // Use OpenAI API (you'll need to set up your OpenAI API key)
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
+            },
+            body: JSON.stringify({
+                model: 'gpt-3.5-turbo',
+                messages: [
+                    {
+                        role: 'system',
+                        content: 'You are a helpful local area guide assistant. Provide informative, engaging responses about local areas, attractions, culture, and travel tips.'
+                    },
+                    {
+                        role: 'user',
+                        content: prompt
+                    }
+                ],
+                max_tokens: 300,
+                temperature: 0.7
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error('OpenAI API request failed');
+        }
+
+        const data = await response.json();
+        const aiResponse = data.choices[0]?.message?.content || 'Sorry, I could not generate a response at this time.';
+
+        res.json({ response: aiResponse });
+
+    } catch (error) {
+        console.error('Error in area AI chat:', error);
+
+        // Fallback response if AI fails
+        const fallbackResponse = `I'd be happy to help you learn more about ${req.body.areaName || 'this area'}! While I'm having trouble accessing my knowledge base right now, I recommend exploring the local attractions, trying regional cuisine, and checking out any historical sites or cultural landmarks. What specific aspect of the area interests you most?`;
+
+        res.json({ response: fallbackResponse });
+    }
+});
+
+// Generate speech endpoint
 app.post('/api/generate-speech', async (req, res) => {
   try {
     if (!fetch) {

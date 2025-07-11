@@ -1396,9 +1396,19 @@ const chatroomMessages = document.getElementById('chatroom-messages');
 const chatroomInputSection = document.getElementById('chatroom-input-section');
 const authRequiredMessage = document.getElementById('auth-required-message');
 
+// Tab elements
+const chatTab = document.getElementById('chat-tab');
+const aiTab = document.getElementById('ai-tab');
+const chatContent = document.getElementById('chat-content');
+const aiContent = document.getElementById('ai-content');
+const aiMessages = document.getElementById('ai-messages');
+const aiMessageInput = document.getElementById('ai-message-input');
+const aiSendButton = document.getElementById('ai-send-button');
+
 let currentChatroomId = null;
 let messageInput = null;
 let sendButton = null;
+let currentAreaName = '';
 
 // Function to normalize destination for consistent chat room ID
 function normalizeDestinationForChat(destination) {
@@ -1543,8 +1553,12 @@ async function openAreaChat() {
         console.log('Opening chat for area:', areaId, areaName);
 
         currentChatroomId = areaId;
+        currentAreaName = areaName;
         chatroomTitle.textContent = `${areaName} Area Chat`;
         chatroomModal.classList.remove('hidden');
+        
+        // Reset to chat tab when opening
+        switchTab('chat');
 
         // Get or create chatroom
         const chatroomRef = await chatroomService.getChatroom(areaId, areaName, user);
@@ -1834,11 +1848,148 @@ function closeAreaChat() {
 
     // Clear messages
     chatroomMessages.innerHTML = '';
+    
+    // Reset AI chat
+    aiMessages.innerHTML = `
+        <div class="text-center text-gray-400 py-8">
+            <div class="text-4xl mb-4">🤖</div>
+            <p class="text-lg">Ask me anything about this area!</p>
+            <p class="text-sm mt-2">I can help you with local information, attractions, history, and more.</p>
+        </div>
+    `;
+    aiMessageInput.value = '';
+    currentAreaName = '';
 }
 
 // Event listeners
 areaChatButton.addEventListener('click', openAreaChat);
 closeChatroomButton.addEventListener('click', closeAreaChat);
+
+// Tab switching
+chatTab.addEventListener('click', () => switchTab('chat'));
+aiTab.addEventListener('click', () => switchTab('ai'));
+
+// AI chat functionality
+aiSendButton.addEventListener('click', sendAIMessage);
+aiMessageInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        sendAIMessage();
+    }
+});
+
+// Tab switching function
+function switchTab(tabName) {
+    if (tabName === 'chat') {
+        chatTab.classList.add('text-cyan-400', 'bg-slate-800', 'border-b-2', 'border-cyan-400');
+        chatTab.classList.remove('text-gray-400');
+        aiTab.classList.remove('text-cyan-400', 'bg-slate-800', 'border-b-2', 'border-cyan-400');
+        aiTab.classList.add('text-gray-400');
+        
+        chatContent.classList.remove('hidden');
+        aiContent.classList.add('hidden');
+    } else if (tabName === 'ai') {
+        aiTab.classList.add('text-cyan-400', 'bg-slate-800', 'border-b-2', 'border-cyan-400');
+        aiTab.classList.remove('text-gray-400');
+        chatTab.classList.remove('text-cyan-400', 'bg-slate-800', 'border-b-2', 'border-cyan-400');
+        chatTab.classList.add('text-gray-400');
+        
+        aiContent.classList.remove('hidden');
+        chatContent.classList.add('hidden');
+    }
+}
+
+// AI chat functionality
+async function sendAIMessage() {
+    const message = aiMessageInput.value.trim();
+    if (!message) return;
+
+    // Add user message to chat
+    addAIMessage(message, 'user');
+    aiMessageInput.value = '';
+
+    // Add loading indicator
+    const loadingId = addAIMessage('Thinking...', 'ai', true);
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/area-ai-chat`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                message: message,
+                areaName: currentAreaName,
+                context: `Current area: ${currentAreaName}. The user is exploring this area virtually through street view and wants to know more about local information, attractions, history, culture, food, and places to visit.`
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error('AI chat request failed');
+        }
+
+        const data = await response.json();
+        
+        // Remove loading message
+        removeAIMessage(loadingId);
+        
+        // Add AI response
+        addAIMessage(data.response, 'ai');
+
+    } catch (error) {
+        console.error('Error sending AI message:', error);
+        
+        // Remove loading message
+        removeAIMessage(loadingId);
+        
+        // Add error message
+        addAIMessage('Sorry, I encountered an error. Please try again.', 'ai');
+    }
+}
+
+function addAIMessage(message, sender, isLoading = false) {
+    const messageId = Date.now().toString();
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `flex items-start gap-3 p-2 rounded ${sender === 'user' ? 'bg-cyan-500/20 ml-8' : 'bg-slate-800 mr-8'}`;
+    messageDiv.id = `ai-message-${messageId}`;
+
+    const avatar = document.createElement('div');
+    avatar.className = 'w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0';
+    avatar.textContent = sender === 'user' ? '👤' : '🤖';
+    avatar.style.backgroundColor = sender === 'user' ? '#0891b2' : '#374151';
+
+    const content = document.createElement('div');
+    content.className = 'flex-1 min-w-0';
+    
+    const messageText = document.createElement('div');
+    messageText.className = 'text-gray-200 text-sm break-words';
+    messageText.textContent = message;
+    
+    if (isLoading) {
+        messageText.className += ' animate-pulse';
+    }
+
+    content.appendChild(messageText);
+    messageDiv.appendChild(avatar);
+    messageDiv.appendChild(content);
+
+    // Check if this is the welcome message, if so replace it
+    const welcomeMessage = aiMessages.querySelector('.text-center.text-gray-400');
+    if (welcomeMessage) {
+        welcomeMessage.remove();
+    }
+
+    aiMessages.appendChild(messageDiv);
+    aiMessages.scrollTop = aiMessages.scrollHeight;
+
+    return messageId;
+}
+
+function removeAIMessage(messageId) {
+    const messageElement = document.getElementById(`ai-message-${messageId}`);
+    if (messageElement) {
+        messageElement.remove();
+    }
+}
 
 // Admin action functions
 async function deleteMessage(messageId) {
